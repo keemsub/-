@@ -53,7 +53,7 @@
     <div id="minute-chips" class="segmented" role="radiogroup" aria-label="집중 시간">
       <button class="chip active" data-min="25">25분</button>
       <button class="chip" data-min="50">50분</button>
-      <button class="chip" data-min="60">60분</button>
+      <button id="chip-custom" class="chip" aria-label="집중 시간 직접 정하기">직접 ✎</button>
     </div>
 
     <div class="actions">
@@ -143,6 +143,33 @@
           <span><b>지도에서 찍기</b><br><span class="muted small">원하는 곳을 직접 골라요</span></span>
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- 집중 시간 직접 정하기 -->
+  <div id="time-modal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="handle"></div>
+      <div class="modal-head">
+        <p class="modal-title">몇 분 집중할까요?</p>
+        <button class="close" data-close="time-modal" aria-label="닫기">✕</button>
+      </div>
+      <div class="time-pick">
+        <button id="time-minus" class="round-btn" aria-label="1분 줄이기">−</button>
+        <p class="time-big"><span id="time-value">25</span><small>분</small></p>
+        <button id="time-plus" class="round-btn" aria-label="1분 늘리기">+</button>
+      </div>
+      <input id="time-range" class="time-range" type="range" min="1" max="180" step="1" value="25" aria-label="집중 시간(분)">
+      <p id="time-hint" class="muted small center-text"></p>
+      <div id="time-presets" class="time-presets">
+        <button class="chip" data-min="10">10분</button>
+        <button class="chip" data-min="15">15분</button>
+        <button class="chip" data-min="30">30분</button>
+        <button class="chip" data-min="45">45분</button>
+        <button class="chip" data-min="90">90분</button>
+        <button class="chip" data-min="120">2시간</button>
+      </div>
+      <button id="time-ok" class="cta">이 시간으로 할게요</button>
     </div>
   </div>
 
