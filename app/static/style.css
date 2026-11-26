@@ -422,10 +422,7 @@ button { cursor: pointer; border: none; background: none; }
 #weather-fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; }
 .phase-dawn .tint { opacity: 1; background: rgb(255 170 190 / 14%); }
 .phase-dusk .tint { opacity: 1; background: linear-gradient(180deg, rgb(255 140 110 / 22%), rgb(255 190 120 / 12%)); }
-.phase-night .tint { opacity: 1; background: rgb(20 28 80 / 38%); }
 .phase-night { --card: rgb(255 255 255 / 95%); }
-.phase-night #map { filter: brightness(0.75) saturate(0.75); }
-.phase-night.view-focus #map { filter: blur(3px) brightness(0.6) saturate(0.6); }
 .phase-dusk .veil {
   background:
     radial-gradient(circle at 20% 15%, rgb(255 170 140 / 75%), transparent 45%),
@@ -434,11 +431,12 @@ button { cursor: pointer; border: none; background: none; }
     rgb(255 232 214 / 72%);
 }
 .phase-night .veil {
+  /* 맑은 밤하늘: 진한 남색 그라데이션 + 밝은 달빛 */
   background:
-    radial-gradient(circle at 80% 12%, rgb(255 244 200 / 35%), transparent 18%),
-    radial-gradient(circle at 20% 20%, rgb(110 100 200 / 55%), transparent 45%),
-    radial-gradient(circle at 50% 95%, rgb(60 90 140 / 60%), transparent 55%),
-    rgb(28 34 72 / 82%);
+    radial-gradient(circle at 14% 7%, #fff8dc 0 2.2%, rgb(255 244 200 / 40%) 3%, transparent 14%),
+    radial-gradient(circle at 15% 30%, rgb(120 110 255 / 30%), transparent 40%),
+    radial-gradient(circle at 50% 100%, rgb(40 120 170 / 45%), transparent 50%),
+    linear-gradient(180deg, rgb(9 13 42 / 90%) 0%, rgb(22 30 84 / 82%) 55%, rgb(30 44 100 / 78%) 100%);
 }
 .phase-night .brand, .phase-night .clock, .phase-night .clock-edit { color: #f4f1ff; }
 .phase-night .clock-sub, .phase-night .status { color: #b9b6d9; }
@@ -586,6 +584,7 @@ button { cursor: pointer; border: none; background: none; }
   .hero { gap: 10px; padding-top: calc(64px + var(--safe-top)); }
   .mode-card { padding: 8px 10px; }
   .mode-icon { font-size: 22px; }
+  .mode-text small { display: none; }
 }
 @media (max-width: 360px) {
   .mode-text small { display: none; }
@@ -599,3 +598,31 @@ button { cursor: pointer; border: none; background: none; }
   .clock { font-size: 3.2rem; }
   .cta { padding: 13px; }
 }
+
+/* ---------- 선명한 밤 ---------- */
+/* 지도는 밤 색으로 바뀌니 위에 덮는 어두운 막은 없애고, 별을 띄워요 */
+.phase-night .tint {
+  opacity: 1;
+  background:
+    radial-gradient(1.5px 1.5px at 12% 18%, #fff 60%, transparent),
+    radial-gradient(1px 1px at 28% 8%, #fff 60%, transparent),
+    radial-gradient(1.5px 1.5px at 47% 14%, #fffbe0 60%, transparent),
+    radial-gradient(1px 1px at 63% 6%, #fff 60%, transparent),
+    radial-gradient(2px 2px at 78% 20%, #fff 60%, transparent),
+    radial-gradient(1px 1px at 90% 11%, #fff 60%, transparent),
+    radial-gradient(1px 1px at 6% 34%, #fff 60%, transparent),
+    radial-gradient(1.5px 1.5px at 36% 27%, #fff 60%, transparent),
+    radial-gradient(1px 1px at 70% 31%, #fff 60%, transparent),
+    radial-gradient(1px 1px at 95% 38%, #fff 60%, transparent),
+    linear-gradient(180deg, rgb(10 14 45 / 45%) 0%, transparent 40%);
+  animation: twinkle 4s ease-in-out infinite alternate;
+}
+@keyframes twinkle { from { filter: brightness(0.8); } to { filter: brightness(1.3); } }
+.phase-night.view-map .tint { opacity: 0.6; }
+.phase-night.view-focus #map { filter: blur(2px); }
+.phase-night .map-card { background: rgb(255 255 255 / 96%); }
+
+/* 지도 화면 위 작은 타이머 */
+.map-timer { display: flex; align-items: center; gap: 8px; flex: none; }
+.map-clock { font-size: 1.5rem; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+.small-round { width: 40px; height: 40px; font-size: 1.05rem; }
