@@ -256,16 +256,23 @@ function addOverlays() {
 }
 map.on("style.load", () => {
   for (const k of Object.keys(buildingOpacity)) delete buildingOpacity[k];
+  for (const k of Object.keys(savedPaint)) delete savedPaint[k];
+  try {
+    addLandmarks();
+  } catch {
+    // 이 지도 모양에 명소 정보가 없으면 그냥 넘어가요
+  }
   applyLabels();
+  applyNightMap();
   applyProjection();
   addOverlays();
   applySky();
   if (streetOn()) setStreetBuildings(true);
 });
 
-// 지명 줄이기: '간단히'면 나라·도시·동네 이름만 남기고 가게·도로·번지 이름은 숨겨요.
+// 지명 줄이기: '간단히'면 나라·도시 이름과 명소(공원·조형물·박물관 등)만 남기고 동네·가게·도로 이름은 숨겨요.
 let labelMode = store.get("labels", "simple");
-const KEEP_LABEL = /(country|continent|state|city|capital|town|village|place_(?!other))/;
+const KEEP_LABEL = /(country|continent|state|city|capital)/;
 function applyLabels() {
   const style = map.getStyle?.();
   if (!style) return;
@@ -273,6 +280,166 @@ function applyLabels() {
     if (layer.type !== "symbol" || layer.id.startsWith("wm-")) continue;
     const keep = labelMode === "all" || KEEP_LABEL.test(layer.id);
     map.setLayoutProperty(layer.id, "visibility", keep ? "visible" : "none");
+  }
+}
+
+// ---------- 지도 꾸미기: 나무와 명소 아이콘 ----------
+// 이모지를 그림으로 만들어 지도에 올려요. 공원 둘레엔 나무, 명소엔 아이콘과 이름이 보여요.
+const LANDMARK_EMOJI = {
+  tree: "🌳",
+  monument: "🗿",
+  museum: "🏛️",
+  castle: "🏯",
+  attraction: "🎡",
+  zoo: "🦁",
+  gallery: "🖼️",
+  viewpoint: "🔭",
+  fountain: "⛲",
+  temple: "⛩️",
+  stadium: "🏟️",
+  park: "🌲",
+};
+
+function emojiImage(emoji, size = 64) {
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const g = c.getContext("2d");
+  g.font = `${size * 0.8}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText(emoji, size / 2, size / 2 + size * 0.05);
+  return g.getImageData(0, 0, size, size);
+}
+
+function addLandmarks() {
+  const style = map.getStyle();
+  const src = Object.entries(style.sources).find(([, v]) => v.type === "vector")?.[0];
+  if (!src) return;
+  const font = style.layers.find((l) => l.layout?.["text-font"])?.layout["text-font"] ?? ["Noto Sans Regular"];
+  for (const [key, emoji] of Object.entries(LANDMARK_EMOJI)) {
+    if (!map.hasImage(`wm-e-${key}`)) map.addImage(`wm-e-${key}`, emojiImage(emoji), { pixelRatio: 2 });
+  }
+  const before = style.layers.find((l) => l.type === "symbol")?.id;
+  // 공원·숲 둘레를 따라 나무를 심어요 (가까이 볼 때만)
+  map.addLayer(
+    {
+      id: "wm-trees",
+      type: "symbol",
+      source: src,
+      "source-layer": "park",
+      minzoom: 14,
+      layout: {
+        "symbol-placement": "line",
+        "symbol-spacing": 70,
+        "icon-image": "wm-e-tree",
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 14, 0.55, 18, 1.1],
+        "icon-allow-overlap": false,
+        "icon-padding": 4,
+      },
+    },
+    before,
+  );
+  // 명소: 아이콘 + 이름 (OpenStreetMap의 poi 정보)
+  const kind = [
+    "match",
+    ["get", "subclass"],
+    ["monument", "memorial", "statue", "artwork", "sculpture"], "wm-e-monument",
+    "viewpoint", "wm-e-viewpoint",
+    "fountain", "wm-e-fountain",
+    [
+      "match",
+      ["get", "class"],
+      "museum", "wm-e-museum",
+      "castle", "wm-e-castle",
+      "attraction", "wm-e-attraction",
+      "zoo", "wm-e-zoo",
+      "art_gallery", "wm-e-gallery",
+      "place_of_worship", "wm-e-temple",
+      "stadium", "wm-e-stadium",
+      "park", "wm-e-park",
+      "",
+    ],
+  ];
+  map.addLayer({
+    id: "wm-landmarks",
+    type: "symbol",
+    source: src,
+    "source-layer": "poi",
+    minzoom: 13,
+    filter: ["any",
+      ["in", ["get", "class"], ["literal", ["museum", "castle", "attraction", "zoo", "art_gallery", "place_of_worship", "stadium", "park", "monument"]]],
+      ["in", ["get", "subclass"], ["literal", ["monument", "memorial", "statue", "artwork", "sculpture", "viewpoint", "fountain"]]],
+    ],
+    layout: {
+      "icon-image": kind,
+      "icon-size": ["interpolate", ["linear"], ["zoom"], 13, 0.7, 18, 1.15],
+      "text-field": ["coalesce", ["get", "name:ko"], ["get", "name"]],
+      "text-font": font,
+      "text-size": 12,
+      "text-offset": [0, 1.3],
+      "text-anchor": "top",
+      "text-max-width": 8,
+      "text-optional": true,
+      "symbol-sort-key": ["match", ["get", "class"], "attraction", 0, "museum", 1, "castle", 1, 5],
+    },
+    paint: {
+      "text-color": "#4a3f35",
+      "text-halo-color": "rgba(255,255,255,0.95)",
+      "text-halo-width": 1.6,
+    },
+  });
+}
+
+// ---------- 선명한 밤 지도 ----------
+// 어둡게 덮지 않고 지도 색 자체를 밤 색으로 바꿔요. 낮이 되면 원래 색으로 돌아가요.
+const NIGHT = {
+  background: "#141a3c",
+  water: "#0d2552",
+  green: "#16343a",
+  land: "#1a2046",
+  building: "#2c3266",
+  road: "#384077",
+  major: "#e2b25a",
+  rail: "#4a5290",
+  text: "#eef0ff",
+  halo: "#0b1030",
+};
+const savedPaint = {};
+function nightColorFor(layer) {
+  const id = layer.id;
+  if (layer.type === "background") return NIGHT.background;
+  if (/water|ocean|river|lake/.test(id)) return NIGHT.water;
+  if (/park|grass|wood|forest|landcover|scrub|wetland|green|pitch|golf/.test(id)) return NIGHT.green;
+  if (/building/.test(id)) return NIGHT.building;
+  if (/rail|transit/.test(id)) return NIGHT.rail;
+  if (/motorway|trunk|primary/.test(id)) return NIGHT.major;
+  if (/road|street|highway|path|bridge|tunnel|minor|service|track|secondary|tertiary/.test(id)) return NIGHT.road;
+  return NIGHT.land;
+}
+const PAINT_PROP = { background: "background-color", fill: "fill-color", line: "line-color", "fill-extrusion": "fill-extrusion-color" };
+
+function applyNightMap() {
+  const style = map.getStyle?.();
+  if (!style) return;
+  const night = phase === "night";
+  for (const layer of style.layers) {
+    if (layer.id.startsWith("wm-") && layer.type !== "symbol") continue;
+    const props = layer.type === "symbol" ? ["text-color", "text-halo-color"] : [PAINT_PROP[layer.type]].filter(Boolean);
+    for (const prop of props) {
+      const key = `${layer.id}|${prop}`;
+      try {
+        if (night) {
+          if (!(key in savedPaint)) savedPaint[key] = map.getPaintProperty(layer.id, prop) ?? null;
+          const color = layer.type === "symbol" ? (prop === "text-color" ? NIGHT.text : NIGHT.halo) : nightColorFor(layer);
+          map.setPaintProperty(layer.id, prop, color);
+        } else if (key in savedPaint) {
+          map.setPaintProperty(layer.id, prop, savedPaint[key] ?? undefined);
+          delete savedPaint[key];
+        }
+      } catch {
+        // 바꿀 수 없는 층은 그대로 둬요
+      }
+    }
   }
 }
 
@@ -1062,6 +1229,9 @@ function setMode(mode) {
   $("btn-pause").hidden = mode === "idle";
   $("btn-stop").hidden = mode === "idle";
   $("btn-pause").textContent = mode === "paused" ? "계속하기" : "일시정지";
+  $("map-timer").hidden = mode === "idle";
+  $("map-pause").textContent = mode === "paused" ? "▶" : "⏸";
+  $("map-pause").setAttribute("aria-label", mode === "paused" ? "계속하기" : "일시정지");
   $("minute-chips").hidden = mode !== "idle";
   $("dest-chip").disabled = mode !== "idle";
   $("btn-dice").disabled = mode !== "idle";
@@ -1096,7 +1266,8 @@ function start() {
   $("status").textContent = flying()
     ? `✈️ ${journey.name}행 비행기가 이륙했어요! 안전벨트를 매 주세요`
     : `${iga(character.name)} 출발했어요! ${character.line}`;
-  setView("focus");
+  // 시작하면 바로 지도에서 캐릭터가 걸어가는 모습을 봐요 (타이머는 지도 위 카드에)
+  setView("map");
   resume();
   if (flying() && session.startM <= 0) takeOff();
 }
@@ -1155,6 +1326,7 @@ function tick() {
 
   const clock = formatClock(session.remainingMs);
   $("clock").textContent = clock;
+  $("map-clock").textContent = clock;
   $("clock-sub").textContent = flying()
     ? `${formatMinutes(Math.floor((d - session.startM) / speedPerMin()))} 비행`
     : `${formatDistance(d - session.startM)} 걸음`;
@@ -1322,7 +1494,7 @@ function renderSettings() {
 
   const labels = $("label-options");
   labels.innerHTML = "";
-  for (const [id, name] of [["simple", "간단히"], ["all", "모두 보기"]]) {
+  for (const [id, name] of [["simple", "명소만"], ["all", "모두 보기"]]) {
     const btn = document.createElement("button");
     btn.className = `chip${labelMode === id ? " active" : ""}`;
     btn.textContent = name;
@@ -1342,6 +1514,7 @@ function renderSettings() {
 $("btn-start").addEventListener("click", start);
 $("btn-pause").addEventListener("click", () => ($("btn-pause").textContent === "일시정지" ? pause() : resume()));
 $("btn-stop").addEventListener("click", stop);
+$("map-pause").addEventListener("click", () => (session && $("btn-pause").textContent === "일시정지" ? pause() : session && resume()));
 $("dest-chip").addEventListener("click", openDestPicker);
 $("btn-settings").addEventListener("click", () => {
   renderSettings();
@@ -1653,6 +1826,7 @@ function applyAtmosphere() {
     document.body.classList.toggle(`wx-${k}`, k === kind);
   }
   applySky();
+  applyNightMap();
   startWeatherFx(kind);
   $("theme-color")?.setAttribute("content", phase === "night" ? "#1d2550" : "#fff6ec");
 }
