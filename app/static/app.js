@@ -44,11 +44,22 @@ const store = {
       return fallback;
     }
   },
-  set(key, value) {
+  set(key, value, { sync = true } = {}) {
     try {
       localStorage.setItem(`walkmodoro:${key}`, JSON.stringify(value));
     } catch {
       // 시크릿 모드 등 저장이 막힌 곳에서는 조용히 넘어가요.
+    }
+    // 로그인 중이면 서버에도 저장해요 (잠깐 모았다가 한 번에)
+    if (sync && key !== "syncedRev") scheduleSync();
+  },
+  keys(prefix) {
+    try {
+      return Object.keys(localStorage)
+        .filter((k) => k.startsWith(`walkmodoro:${prefix}`))
+        .map((k) => k.slice("walkmodoro:".length));
+    } catch {
+      return [];
     }
   },
 };
@@ -57,6 +68,8 @@ let character = CHARACTERS.find((c) => c.id === store.get("character", "turtle")
 let styleIndex = Math.max(0, MAP_STYLES.findIndex((s) => s.id === store.get("mapStyle", "liberty")));
 let journey = store.get("journey", null);
 let minutes = 25;
+let me = null; // 로그인 정보 (/api/me)
+let syncTimer = null;
 
 // ---------- 거리 계산 도우미 ----------
 function haversine([lon1, lat1], [lon2, lat2]) {
@@ -672,6 +685,111 @@ for (const chip of document.querySelectorAll("#minute-chips .chip")) {
   });
 }
 
+// ---------- 로그인과 서버 저장 ----------
+const PROVIDERS = {
+  kakao: { label: "카카오로 시작하기", icon: "💬" },
+  google: { label: "Google로 시작하기", icon: "🔵" },
+};
+
+function collectState() {
+  const days = {};
+  for (const key of store.keys("day:")) days[key.slice(4)] = store.get(key, null);
+  return {
+    character: character.id,
+    mapStyle: MAP_STYLES[styleIndex].id,
+    journey,
+    days,
+  };
+}
+
+function applyState(state) {
+  const quiet = { sync: false };
+  if (state.character) store.set("character", state.character, quiet);
+  if (state.mapStyle) store.set("mapStyle", state.mapStyle, quiet);
+  store.set("journey", state.journey ?? null, quiet);
+  for (const [day, record] of Object.entries(state.days || {})) store.set(`day:${day}`, record, quiet);
+}
+
+function scheduleSync() {
+  if (!me?.user) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncNow, 800);
+}
+
+async function syncNow() {
+  if (!me?.user) return;
+  try {
+    const res = await fetch("/api/me/state", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: collectState() }),
+    });
+    if (res.ok) store.set("syncedRev", (await res.json()).rev);
+  } catch {
+    // 네트워크가 끊겨도 기록은 브라우저에 남아 있어요. 다음 저장 때 다시 올려요.
+  }
+}
+
+function renderAccount() {
+  const box = $("account");
+  box.innerHTML = "";
+  if (!me || (!me.user && !me.providers.length)) {
+    box.hidden = true;
+    return;
+  }
+  box.hidden = false;
+  if (me.user) {
+    const row = document.createElement("div");
+    row.className = "account-row";
+    row.innerHTML = '<div><p class="account-name"></p><p class="muted small">기록이 계정에 저장되고 있어요</p></div><button class="pill">로그아웃</button>';
+    row.querySelector(".account-name").textContent = `${me.user.nickname || "걷는 친구"}님`;
+    row.querySelector("button").addEventListener("click", async () => {
+      await fetch("/auth/logout", { method: "POST" });
+      me.user = null;
+      store.set("syncedRev", 0);
+      renderAccount();
+    });
+    box.appendChild(row);
+    return;
+  }
+  const intro = document.createElement("p");
+  intro.className = "small";
+  intro.innerHTML = "<b>로그인하면</b> 휴대폰을 바꿔도 여정과 기록이 이어져요";
+  box.appendChild(intro);
+  for (const id of me.providers) {
+    const a = document.createElement("a");
+    a.className = `login-btn ${id}`;
+    a.href = `/auth/${id}/login`;
+    a.textContent = `${PROVIDERS[id].icon} ${PROVIDERS[id].label}`;
+    box.appendChild(a);
+  }
+}
+
+async function initAccount() {
+  const params = new URLSearchParams(location.search);
+  if (params.has("login")) {
+    params.delete("login");
+    const rest = params.toString();
+    history.replaceState(null, "", location.pathname + (rest ? `?${rest}` : ""));
+  }
+  try {
+    me = await api("/api/me");
+  } catch {
+    return;
+  }
+  renderAccount();
+  if (!me.user) return;
+  if (me.state && me.rev !== store.get("syncedRev", 0)) {
+    // 다른 기기에서 저장한 최신 기록이 있으면 그걸로 바꾸고 다시 그려요.
+    applyState(me.state);
+    store.set("syncedRev", me.rev);
+    location.reload();
+    return;
+  }
+  if (!me.state) syncNow(); // 처음 로그인: 지금까지의 기록을 계정에 올려요
+  $("status").textContent = `${me.user.nickname || "걷는 친구"}님, 오늘도 같이 걸어요`;
+}
+
 // ---------- 시작 ----------
 api("/api/config")
   .then((c) => {
@@ -679,6 +797,11 @@ api("/api/config")
     renderJourney();
   })
   .catch(() => {});
+
+const loginResult = new URLSearchParams(location.search).get("login");
+initAccount().then(() => {
+  if (loginResult === "fail") $("status").textContent = "로그인에 실패했어요. 다시 시도해 주세요.";
+});
 
 renderCharacter();
 updatePadding();
