@@ -130,3 +130,20 @@ def test_normalize_postgres_url():
         "postgresql+psycopg://"
     )
     assert normalize_url("sqlite:///./x.db") == "sqlite:///./x.db"
+
+
+def test_delete_account_removes_user_and_state(client):
+    login(client)
+    client.put("/api/me/state", json={"data": {"character": "cat"}})
+    assert client.delete("/api/me").json() == {"ok": True}
+    assert client.get("/api/me").json()["user"] is None
+
+    from app.db import User, UserState
+
+    db = client.Session()
+    assert db.query(User).count() == 0
+    assert db.query(UserState).count() == 0
+
+
+def test_delete_requires_login(client):
+    assert client.delete("/api/me").status_code == 401

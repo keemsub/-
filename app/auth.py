@@ -14,7 +14,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.db import User, get_db, load_state, save_state, upsert_user
+from app.db import User, delete_user, get_db, load_state, save_state, upsert_user
 
 router = APIRouter()
 MAX_STATE_BYTES = 1_000_000  # 회원 한 명의 저장 상태는 1MB까지
@@ -118,6 +118,20 @@ def me(
         "state": state,
         "rev": rev,
     }
+
+
+@router.delete("/api/me")
+def delete_me(
+    request: Request,
+    user: Annotated[User | None, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """회원 탈퇴. 계정과 저장된 기록을 바로 지우고 로그아웃해요."""
+    if user is None:
+        raise HTTPException(status_code=401, detail="로그인이 필요해요.")
+    delete_user(db, user.id)
+    request.session.clear()
+    return {"ok": True}
 
 
 @router.put("/api/me/state")

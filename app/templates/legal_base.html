@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fff6ec">
+  <title>{% block title %}{% endblock %} · 걸음모도로</title>
+  <link rel="icon" type="image/png" href="/static/icons/icon-192.png">
+  <style>
+    :root { --ink: #3b3530; --muted: #8a8079; --mint: #4bae82; --bg: #fff6ec; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.75 "Pretendard Variable", -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
+    main { max-width: 680px; margin: 0 auto; padding: 28px 18px 64px; }
+    a { color: var(--mint); }
+    h1 { font-size: 1.6rem; margin: 18px 0 4px; }
+    h2 { font-size: 1.1rem; margin: 28px 0 6px; }
+    .muted { color: var(--muted); font-size: 0.9rem; }
+    .back { text-decoration: none; font-weight: 700; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eadfd3; vertical-align: top; }
+    li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="back" href="/">← 걸음모도로로 돌아가기</a>
+    {% block body %}{% endblock %}
+    <h2>문의</h2>
+    <p>
+      {% if contact_email %}
+        <a href="mailto:{{ contact_email }}">{{ contact_email }}</a> 로 연락 주세요.
+      {% else %}
+        <a href="https://github.com/keemsub/walkmodoro/issues">GitHub 이슈</a>로 남겨 주세요.
+      {% endif %}
+    </p>
+    <p class="muted">최종 수정일: {{ updated }}</p>
+  </main>
+</body>
+</html>
