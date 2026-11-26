@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import get_settings
 from app.isochrone import CachedProvider, DemoProvider, IsochroneProvider, OrsProvider
+from app.places import OverpassProvider, PlaceProvider, outer_ring, pick_destination
 
 BASE_DIR = Path(__file__).parent
 
@@ -26,6 +27,11 @@ def get_provider() -> IsochroneProvider:
     if settings.ors_api_key:
         return CachedProvider(OrsProvider(settings.ors_api_key))
     return CachedProvider(DemoProvider(settings.walking_speed_kmh))
+
+
+@lru_cache
+def get_place_provider() -> PlaceProvider:
+    return OverpassProvider()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -45,8 +51,40 @@ def isochrone(
     provider: Annotated[IsochroneProvider, Depends(get_provider)],
     minutes: Annotated[int, Query(ge=5, le=60, description="집중 시간(분)")] = 25,
 ):
+    return {
+        "provider": provider.name,
+        "minutes": minutes,
+        "geojson": _isochrone(provider, lat, lon, minutes),
+    }
+
+
+@app.get("/api/trip")
+def trip(
+    lat: Annotated[float, Query(ge=-90, le=90, description="위도")],
+    lon: Annotated[float, Query(ge=-180, le=180, description="경도")],
+    provider: Annotated[IsochroneProvider, Depends(get_provider)],
+    places: Annotated[PlaceProvider, Depends(get_place_provider)],
+    minutes: Annotated[int, Query(ge=5, le=60, description="집중 시간(분)")] = 25,
+):
+    """집중을 시작할 때 부르는 곳: 도보 범위 + 거북이가 도착할 '오늘의 여행지'."""
+    geojson = _isochrone(provider, lat, lon, minutes)
+    ring = outer_ring(geojson)
     try:
-        geojson = provider.get_isochrone(lat, lon, minutes)
+        candidates = places.find_places(ring)
+    except httpx.HTTPError:
+        candidates = []  # 장소 검색이 실패해도 여행은 계속됩니다.
+    destination = pick_destination(candidates, lat, lon, ring)
+    return {
+        "provider": provider.name,
+        "minutes": minutes,
+        "geojson": geojson,
+        "destination": destination.to_dict(),
+        "candidates": len(candidates),
+    }
+
+
+def _isochrone(provider: IsochroneProvider, lat: float, lon: float, minutes: int):
+    try:
+        return provider.get_isochrone(lat, lon, minutes)
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail="지도 API 호출에 실패했어요.") from exc
-    return {"provider": provider.name, "minutes": minutes, "geojson": geojson}
