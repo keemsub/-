@@ -6,7 +6,7 @@ from typing import Annotated
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -62,6 +62,50 @@ def get_router() -> Router:
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     return templates.TemplateResponse(request, "index.html", {"avatar": catalog()})
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy(request: Request):
+    return templates.TemplateResponse(request, "privacy.html", _legal_context())
+
+
+@app.get("/terms", response_class=HTMLResponse)
+def terms(request: Request):
+    return templates.TemplateResponse(request, "terms.html", _legal_context())
+
+
+def _legal_context() -> dict:
+    return {"contact_email": get_settings().contact_email, "updated": "2026년 11월 26일"}
+
+
+@app.get("/sw.js")
+def service_worker():
+    """앱 설치(PWA)용 서비스 워커. 사이트 전체를 맡도록 맨 앞 주소에서 내보내요."""
+    return FileResponse(
+        BASE_DIR / "static" / "sw.js",
+        media_type="text/javascript",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@app.get("/.well-known/assetlinks.json")
+def assetlinks():
+    """구글 플레이 앱(TWA)이 이 사이트의 주인임을 확인하는 파일."""
+    settings = get_settings()
+    if not (settings.android_package and settings.android_sha256):
+        return []
+    return [
+        {
+            "relation": ["delegate_permission/common.handle_all_urls"],
+            "target": {
+                "namespace": "android_app",
+                "package_name": settings.android_package,
+                "sha256_cert_fingerprints": [
+                    fp.strip() for fp in settings.android_sha256.split(",") if fp.strip()
+                ],
+            },
+        }
+    ]
 
 
 @app.get("/health")

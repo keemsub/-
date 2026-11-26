@@ -94,6 +94,17 @@ def load_state(db: Session, user_id: int) -> tuple[dict[str, Any] | None, int]:
     return json.loads(row.data), row.rev
 
 
+def delete_user(db: Session, user_id: int) -> None:
+    """회원 탈퇴: 저장된 기록과 회원 정보를 모두 지워요."""
+    state = db.get(UserState, user_id)
+    if state is not None:
+        db.delete(state)
+    user = db.get(User, user_id)
+    if user is not None:
+        db.delete(user)
+    db.commit()
+
+
 def save_state(db: Session, user_id: int, data: dict[str, Any]) -> int:
     row = db.get(UserState, user_id)
     if row is None:

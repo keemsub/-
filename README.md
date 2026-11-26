@@ -104,6 +104,10 @@ render.yaml      # Render 배포 설정
 tests/           # 자동 테스트
 ```
 
+## 출시하기
+
+구글 플레이 등록 순서, 서버 요금제, 도메인, 스토어 심사 준비물은 [docs/launch-guide.md](docs/launch-guide.md)에 정리돼 있어요.
+
 ## 다음 단계
 
 - 휴대폰으로 써 보고 지인 20명에게 공유하기 (2단계 관문)

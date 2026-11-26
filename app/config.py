@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
 
+    # ---- 출시 ----
+    # 문의 받을 이메일 (개인정보처리방침·이용약관에 보여요)
+    contact_email: str = ""
+    # 구글 플레이 앱(TWA) 연결용: 앱 패키지 이름과 서명 인증서 SHA-256 지문
+    android_package: str = ""
+    android_sha256: str = ""
+
     def login_providers(self) -> list[str]:
         providers = []
         if self.kakao_client_id:

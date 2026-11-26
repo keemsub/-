@@ -29,3 +29,11 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
+      # 개인정보처리방침·이용약관에 보일 문의 이메일
+      - key: CONTACT_EMAIL
+        sync: false
+      # 구글 플레이 앱 연결 (docs/launch-guide.md 참고)
+      - key: ANDROID_PACKAGE
+        sync: false
+      - key: ANDROID_SHA256
+        sync: false

@@ -949,6 +949,33 @@ function renderAccount() {
       renderAccount();
     });
     box.appendChild(row);
+
+    // 계정 삭제: 실수로 누르지 않게 두 번 눌러야 지워져요.
+    const del = document.createElement("button");
+    del.className = "text-btn small danger";
+    del.textContent = "계정 삭제";
+    let armed = false;
+    del.addEventListener("click", async () => {
+      if (!armed) {
+        armed = true;
+        del.textContent = "한 번 더 누르면 계정과 서버 기록이 모두 지워져요";
+        setTimeout(() => {
+          armed = false;
+          del.textContent = "계정 삭제";
+        }, 5000);
+        return;
+      }
+      const res = await fetch("/api/me", { method: "DELETE" });
+      if (!res.ok) {
+        del.textContent = "삭제하지 못했어요. 다시 시도해 주세요.";
+        return;
+      }
+      me.user = null;
+      store.set("syncedRev", 0);
+      renderAccount();
+      $("status").textContent = "계정을 삭제했어요. 이 기기의 기록은 그대로 남아 있어요.";
+    });
+    box.appendChild(del);
     return;
   }
   const intro = document.createElement("p");
@@ -987,6 +1014,11 @@ async function initAccount() {
   }
   if (!me.state) syncNow(); // 처음 로그인: 지금까지의 기록을 계정에 올려요
   $("status").textContent = `${me.user.nickname || "걷는 친구"}님, 오늘도 같이 걸어요`;
+}
+
+// ---------- 앱 설치(PWA) ----------
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
 
 // ---------- 시작 ----------
