@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>걸음모도로</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}">
+</head>
+<body>
+  <header>
+    <h1>🐢 걸음모도로</h1>
+    <p class="sub">집중한 시간만큼, 걸어서 갈 수 있는 곳</p>
+  </header>
+
+  <section class="controls">
+    <label for="minutes">집중 시간</label>
+    <select id="minutes">
+      <option value="25" selected>25분</option>
+      <option value="50">50분</option>
+      <option value="60">60분</option>
+    </select>
+    <button id="show">내 위치에서 보기</button>
+  </section>
+
+  <p id="status" class="status">버튼을 누르면 위치 권한을 물어봐요.</p>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="{{ url_for('static', path='app.js') }}"></script>
+</body>
+</html>
