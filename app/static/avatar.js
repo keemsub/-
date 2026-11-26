@@ -61,7 +61,7 @@
   const TORSO = "M42 104 Q42 91 60 91 Q78 91 78 104 L80 124 Q80 129 75 129 L45 129 Q40 129 40 124Z";
 
   function arms(color, skin) {
-    return `<g><ellipse cx="38" cy="107" rx="6" ry="11" transform="rotate(18 38 107)" fill="${color}"/><ellipse cx="82" cy="107" rx="6" ry="11" transform="rotate(-18 82 107)" fill="${color}"/><circle cx="34.5" cy="117" r="5" fill="${skin}"/><circle cx="85.5" cy="117" r="5" fill="${skin}"/></g>`;
+    return `<g class="arm-l"><ellipse cx="38" cy="107" rx="6" ry="11" transform="rotate(18 38 107)" fill="${color}"/><circle cx="34.5" cy="117" r="5" fill="${skin}"/></g><g class="arm-r"><ellipse cx="82" cy="107" rx="6" ry="11" transform="rotate(-18 82 107)" fill="${color}"/><circle cx="85.5" cy="117" r="5" fill="${skin}"/></g>`;
   }
 
   function legs(color) {

@@ -17,6 +17,7 @@ from app.config import get_settings
 from app.isochrone import CachedProvider, DemoProvider, IsochroneProvider, OrsProvider
 from app.journey import Geocoder, NominatimGeocoder, OrsRouter, OsmFootRouter, Router
 from app.places import OverpassProvider, PlaceProvider, outer_ring, pick_destination
+from app.weather import OpenMeteoWeather
 
 BASE_DIR = Path(__file__).parent
 
@@ -182,6 +183,24 @@ def route(
 ):
     """출발지에서 목적지까지 가는 길. 먼 곳이어도 길 전체를 주고, 얼마나 갈지는 화면이 정해요."""
     return router.route((from_lat, from_lon), (to_lat, to_lon)).to_dict()
+
+
+@lru_cache
+def get_weather() -> OpenMeteoWeather:
+    return OpenMeteoWeather()
+
+
+@app.get("/api/weather")
+def weather(
+    lat: Annotated[float, Query(ge=-90, le=90)],
+    lon: Annotated[float, Query(ge=-180, le=180)],
+    source: Annotated[OpenMeteoWeather, Depends(get_weather)],
+):
+    """지금 날씨 (낮·밤과 함께 화면 분위기를 바꿔요)."""
+    try:
+        return source.current(lat, lon).to_dict()
+    except (httpx.HTTPError, KeyError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="날씨를 가져오지 못했어요.") from exc
 
 
 @app.get("/api/avatar/items")
