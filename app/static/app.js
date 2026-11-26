@@ -515,10 +515,11 @@ function setWalker(lngLat, nextLngLat) {
   const body = walkerEl.querySelector(".walker-body");
   if (!body.firstChild) paintFigure(body);
   if (flying()) {
-    // ✈️ 그림은 오른쪽 위(45°)를 보고 있어서, 가는 방향에 맞춰 돌려요.
+    // 비행기(와 뒤로 흐르는 구름)를 가는 방향으로 돌려요.
     if (nextLngLat) {
-      const deg = bearingBetween(lngLat, nextLngLat) - map.getBearing() - 45;
-      body.querySelector(".plane")?.style.setProperty("transform", `rotate(${deg}deg)`);
+      const deg = bearingBetween(lngLat, nextLngLat) - map.getBearing();
+      body.querySelector(".plane-wrap")?.style.setProperty("transform", `rotate(${deg}deg)`);
+      $("fly-clouds").style.setProperty("--heading", `${deg}deg`);
     }
     return;
   }
@@ -597,16 +598,17 @@ function flyCamera(animate = true) {
 }
 
 // 활주로에서 출발해 하늘로 올라가며 지구가 보일 때까지 멀어져요.
+// 시작 버튼을 누르는 순간 바로 떠올라요: 공항에서 점점 높이 올라가며 지구가 보일 때까지.
 function takeOff() {
-  $("status").textContent = `🛫 ${FLIGHTS.origin.name}공항 활주로를 달려요... 곧 이륙!`;
-  lastFollow = Date.now() + 9000;
-  takeoffUntil = Date.now() + 9000;
-  map.easeTo({ center: path.coords[0], zoom: 12.6, pitch: 50, bearing: bearingBetween(path.coords[0], path.coords[4]), duration: 800 });
-  setTimeout(() => {
-    if (!session) return;
-    $("status").textContent = `✈️ 이륙했어요! ${journey.name}까지 지구 위를 날아가요`;
-    map.flyTo({ center: pointAt(path, liveMeters()).point, zoom: CRUISE_ZOOM, pitch: 0, bearing: 0, duration: 6500, curve: 1.2 });
-  }, 2500);
+  $("status").textContent = `🛫 이륙! ${journey.name}까지 지구 위를 날아가요`;
+  lastFollow = Date.now() + 7000;
+  takeoffUntil = Date.now() + 7000;
+  document.body.classList.remove("takeoff");
+  void document.body.offsetWidth; // 애니메이션을 처음부터 다시
+  document.body.classList.add("takeoff");
+  setTimeout(() => document.body.classList.remove("takeoff"), 6500);
+  map.jumpTo({ center: path.coords[0], zoom: 12.6, pitch: 45, bearing: 0 });
+  map.flyTo({ center: pointAt(path, liveMeters() + speedPerMin() * 0.1).point, zoom: CRUISE_ZOOM, pitch: 0, bearing: 0, duration: 6000, curve: 1.3, essential: true });
 }
 
 function applyProjection() {
@@ -992,7 +994,7 @@ function paintFigure(el) {
   el.classList.add("figure");
   if (el.classList.contains("walker-body") && flying()) {
     el.classList.add("figure");
-    el.innerHTML = '<span class="plane">✈️</span>';
+    el.innerHTML = '<span class="plane-wrap"><span class="trail"></span><span class="plane">✈️</span></span>';
     return;
   }
   const back = el.classList.contains("walker-body") && streetOn();
@@ -1230,6 +1232,8 @@ function setMode(mode) {
   $("btn-stop").hidden = mode === "idle";
   $("btn-pause").textContent = mode === "paused" ? "계속하기" : "일시정지";
   $("map-timer").hidden = mode === "idle";
+  // 비행 중에는 비행기 아래로 구름이 흘러가요 (멈추면 구름도 멈춰요)
+  document.body.classList.toggle("flying-now", mode === "running" && flying());
   $("map-pause").textContent = mode === "paused" ? "▶" : "⏸";
   $("map-pause").setAttribute("aria-label", mode === "paused" ? "계속하기" : "일시정지");
   $("minute-chips").hidden = mode !== "idle";
@@ -1269,7 +1273,11 @@ function start() {
   // 시작하면 바로 지도에서 캐릭터가 걸어가는 모습을 봐요 (타이머는 지도 위 카드에)
   setView("map");
   resume();
-  if (flying() && session.startM <= 0) takeOff();
+  // 화면 전환(지도 여백 조정)이 끝난 다음 프레임에 이륙해야 카메라 움직임이 끊기지 않아요
+  if (flying() && session.startM <= 0) {
+    takeoffUntil = Date.now() + 7000;
+    setTimeout(() => session && takeOff(), 80);
+  }
 }
 
 function resume() {
