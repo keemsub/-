@@ -66,3 +66,12 @@ def test_cache_reuses_nearby_requests():
     cached.get_isochrone(37.56612, 126.97801, 25)
     cached.get_isochrone(37.56638, 126.97812, 25)  # 몇 미터 차이
     assert len(calls) == 1
+
+
+def test_pwa_manifest_and_icons_are_served():
+    page = client.get("/").text
+    assert "manifest.webmanifest" in page
+    manifest = client.get("/static/manifest.webmanifest").json()
+    assert manifest["display"] == "standalone"
+    for icon in manifest["icons"]:
+        assert client.get(icon["src"]).status_code == 200
