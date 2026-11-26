@@ -12,6 +12,12 @@ from typing import Any, Protocol
 import httpx
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
+# 기본 서버가 바쁘거나(429) 느리면 다른 무료 서버에 다시 물어봐요.
+OVERPASS_MIRRORS = [
+    OVERPASS_URL,
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://overpass.private.coffee/api/interpreter",
+]
 
 # OpenStreetMap 태그 → 화면에 보여줄 한국어 종류
 KINDS: dict[tuple[str, str], str] = {
@@ -74,14 +80,26 @@ class OverpassProvider:
         return [p for el in response.json().get("elements", []) if (p := _to_place(el))]
 
     def find_around(self, lat: float, lon: float, radius_m: int) -> list[Place]:
-        """내 위치에서 radius_m 안에 있는 명소들."""
+        """내 위치에서 radius_m 안에 있는 명소들. 서버가 실패하면 다른 서버로 다시 시도해요."""
         around = f"around:{radius_m},{lat:.5f},{lon:.5f}"
-        filters = "".join(f'nwr["{k}"="{v}"]["name"]({around});' for k, v in ATTRACTIONS)
-        query = f"[out:json][timeout:15];({filters});out center 300;"
-        response = self.client.post(OVERPASS_URL, data={"data": query})
-        response.raise_for_status()
-        elements = response.json().get("elements", [])
-        return [p for el in elements if (p := _to_place(el, ATTRACTIONS))]
+        # 태그 종류(tourism, leisure...)마다 한 줄로 묶어 질문을 가볍게 해요
+        groups: dict[str, list[str]] = {}
+        for k, v in ATTRACTIONS:
+            groups.setdefault(k, []).append(v)
+        filters = "".join(
+            f'nwr["{k}"~"^({"|".join(vs)})$"]["name"]({around});' for k, vs in groups.items()
+        )
+        query = f"[out:json][timeout:20];({filters});out center 400;"
+        last_error: Exception | None = None
+        for url in OVERPASS_MIRRORS:
+            try:
+                response = self.client.post(url, data={"data": query}, timeout=25)
+                response.raise_for_status()
+                elements = response.json().get("elements", [])
+                return [p for el in elements if (p := _to_place(el, ATTRACTIONS))]
+            except (httpx.HTTPError, ValueError) as exc:
+                last_error = exc
+        raise httpx.HTTPError(f"모든 장소 서버가 실패했어요: {last_error}")
 
 
 def pick_destination(

@@ -929,7 +929,19 @@ function setStreetMode(on, refocus = true) {
 }
 
 // ---------- 여정 표시 ----------
+// 지도에서 목적지를 고르면 지도 카드에 '집중 시작' 버튼이 켜져요. 눌러야 타이머가 시작돼요.
+function renderMapStart() {
+  const btn = $("map-start");
+  const ready = !!journey && journey.walked_m < journey.route.distance_m - 1;
+  btn.hidden = !!session;
+  btn.disabled = !ready;
+  btn.textContent = ready
+    ? `▶ ${formatMinutes(minutes)} 집중 시작${flying() ? " · 이륙" : ""}`
+    : journey ? "도착했어요! 새 목적지를 골라 주세요" : "목적지를 먼저 골라 주세요";
+}
+
 function renderJourney(liveMeters) {
+  renderMapStart();
   $("journey-flag").textContent = flying() ? "✈️" : "🏁";
   if (!journey) {
     $("dest-name").textContent = "목적지를 정해 주세요";
@@ -1232,6 +1244,7 @@ function setMode(mode) {
   $("btn-stop").hidden = mode === "idle";
   $("btn-pause").textContent = mode === "paused" ? "계속하기" : "일시정지";
   $("map-timer").hidden = mode === "idle";
+  renderMapStart();
   // 비행 중에는 비행기 아래로 구름이 흘러가요 (멈추면 구름도 멈춰요)
   document.body.classList.toggle("flying-now", mode === "running" && flying());
   $("map-pause").textContent = mode === "paused" ? "▶" : "⏸";
@@ -1283,6 +1296,7 @@ function start() {
 function resume() {
   session.endAt = Date.now() + session.remainingMs;
   clearInterval(ticker);
+  ticker = null; // 멈춘 동안 캐릭터도 제자리에 있도록
   ticker = setInterval(tick, 200);
   setMode("running");
   tick();
@@ -1292,12 +1306,14 @@ function resume() {
 function pause() {
   session.remainingMs = Math.max(0, session.endAt - Date.now());
   clearInterval(ticker);
+  ticker = null; // 멈춘 동안 캐릭터도 제자리에 있도록
   setMode("paused");
   $("status").textContent = `${iga(character.name)} 잠깐 쉬는 중이에요.`;
 }
 
 function stop() {
   clearInterval(ticker);
+  ticker = null; // 멈춘 동안 캐릭터도 제자리에 있도록
   session = null;
   setMode("idle");
   drawJourney();
@@ -1347,6 +1363,7 @@ function tick() {
 
 function finish() {
   clearInterval(ticker);
+  ticker = null; // 멈춘 동안 캐릭터도 제자리에 있도록
   const walked = session.targetM - session.startM;
   journey.walked_m = session.targetM;
   saveJourney();
@@ -1580,6 +1597,7 @@ function setMinutes(m) {
 }
 
 function renderMinuteChips() {
+  if (typeof renderMapStart === "function") renderMapStart();
   const custom = !PRESET_MINUTES.includes(minutes);
   for (const c of document.querySelectorAll("#minute-chips .chip[data-min]")) {
     c.classList.toggle("active", Number(c.dataset.min) === minutes);
@@ -1808,12 +1826,24 @@ function sunTimes(date, lat, lon) {
   if (cosW < -1) return null; // 백야
   const w = Math.acos(cosW) / rad;
   const toDate = (j) => new Date((j - 2440587.5) * 86400000);
-  return { rise: toDate(transit - w / 360), set: toDate(transit + w / 360) };
+  return { rise: toDate(transit - w / 360), set: toDate(transit + w / 360), noon: toDate(transit) };
+}
+
+// 공식은 '세계 표준시(UTC) 날짜'의 해를 계산해요. 한국 아침 8시는 UTC로 아직 전날 밤이라
+// 어제 해를 쓰게 되는 문제가 있었어요. 그래서 앞뒤 하루씩 계산해 정오가 지금과 가장 가까운 날을 써요.
+function sunToday(now, lat, lon) {
+  const day = 86400000;
+  let best = null;
+  for (const off of [-1, 0, 1]) {
+    const s = sunTimes(new Date(now.getTime() + off * day), lat, lon);
+    if (s && (!best || Math.abs(s.noon - now) < Math.abs(best.noon - now))) best = s;
+  }
+  return best;
 }
 
 let sunPos = store.get("lastPos", FALLBACK); // 마지막으로 알던 위치 (없으면 서울)
 function phaseNow(now = new Date()) {
-  const sun = sunTimes(now, sunPos.lat, sunPos.lon);
+  const sun = sunToday(now, sunPos.lat, sunPos.lon);
   if (!sun) return "day";
   const min = 60000;
   const t = now.getTime();
@@ -1947,6 +1977,7 @@ for (const b of document.querySelectorAll("#mode-switch .mode-card")) {
   b.addEventListener("click", () => onModeTap(b.dataset.mode));
 }
 $("btn-dice").addEventListener("click", rollDice);
+$("map-start").addEventListener("click", start);
 renderSound();
 renderModeSwitch();
 renderCharacter();
