@@ -9,7 +9,9 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 
+from app.auth import router as auth_router
 from app.config import get_settings
 from app.isochrone import CachedProvider, DemoProvider, IsochroneProvider, OrsProvider
 from app.journey import Geocoder, NominatimGeocoder, OrsRouter, Router, StraightRouter
@@ -18,6 +20,16 @@ from app.places import OverpassProvider, PlaceProvider, outer_ring, pick_destina
 BASE_DIR = Path(__file__).parent
 
 app = FastAPI(title="걸음모도로")
+settings = get_settings()
+# 로그인 상태를 서명된 쿠키에 저장해요 (60일 유지)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.secret_key,
+    https_only=settings.cookie_secure,
+    same_site="lax",
+    max_age=60 * 60 * 24 * 60,
+)
+app.include_router(auth_router)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
