@@ -257,6 +257,7 @@ function addOverlays() {
 map.on("style.load", () => {
   for (const k of Object.keys(buildingOpacity)) delete buildingOpacity[k];
   applyLabels();
+  applyProjection();
   addOverlays();
   applySky();
   if (streetOn()) setStreetBuildings(true);
@@ -288,6 +289,8 @@ function applySky() {
       "horizon-fog-blend": weatherNow?.kind === "fog" ? 0.95 : 0.7,
       "fog-color": p.fog,
       "fog-ground-blend": weatherNow?.kind === "fog" ? 0.75 : 0.35,
+      // 여행 모드에서 멀리 올라가면 지구 둘레에 푸른 대기가 보여요
+      "atmosphere-blend": flying() ? ["interpolate", ["linear"], ["zoom"], 0, 1, 5, 1, 8, 0] : 0,
     });
   } catch {
     // 하늘을 지원하지 않는 환경이면 그냥 넘어가요.
@@ -384,11 +387,8 @@ function focusWalker(animate = true) {
   if (!journey || !path || streetOn()) return;
   const here = pointAt(path, session ? liveMeters() : journey.walked_m).point;
   const s = MAP_STYLES[styleIndex];
+  if (flying()) return flyCamera(animate);
   lastFollow = Date.now() + 1300; // 이 이동이 끝날 때까지 따라가기를 잠시 멈춰요
-  if (flying()) {
-    map.easeTo({ center: here, zoom: 4.3, pitch: 25, bearing: 0, duration: animate ? 1200 : 0 });
-    return;
-  }
   map.easeTo({ center: here, zoom: 16.2, pitch: s.pitch, bearing: -12, duration: animate ? 1200 : 0 });
 }
 
@@ -412,7 +412,46 @@ function saveJourney() {
   store.set(journeyKey(), journey);
 }
 
+// 비행 카메라: 출발 전엔 공항 활주로, 나는 중엔 지구본 위, 도착하면 도착 도시
+const CRUISE_ZOOM = 2.3; // 지구가 둥글게 보이는 높이
+let takeoffUntil = 0;
+function flyCamera(animate = true) {
+  if (!journey || !path || Date.now() < takeoffUntil) return;
+  const d = session ? liveMeters() : journey.walked_m;
+  const duration = animate ? 1600 : 0;
+  lastFollow = Date.now() + duration + 100;
+  if (d <= 0) {
+    map.easeTo({ center: path.coords[0], zoom: 12.6, pitch: 50, bearing: bearingBetween(path.coords[0], path.coords[4]), duration });
+  } else if (d >= journey.route.distance_m - 1) {
+    map.easeTo({ center: path.coords.at(-1), zoom: 10.5, pitch: 40, bearing: 0, duration });
+  } else {
+    map.easeTo({ center: pointAt(path, d).point, zoom: CRUISE_ZOOM, pitch: 0, bearing: 0, duration });
+  }
+}
+
+// 활주로에서 출발해 하늘로 올라가며 지구가 보일 때까지 멀어져요.
+function takeOff() {
+  $("status").textContent = `🛫 ${FLIGHTS.origin.name}공항 활주로를 달려요... 곧 이륙!`;
+  lastFollow = Date.now() + 9000;
+  takeoffUntil = Date.now() + 9000;
+  map.easeTo({ center: path.coords[0], zoom: 12.6, pitch: 50, bearing: bearingBetween(path.coords[0], path.coords[4]), duration: 800 });
+  setTimeout(() => {
+    if (!session) return;
+    $("status").textContent = `✈️ 이륙했어요! ${journey.name}까지 지구 위를 날아가요`;
+    map.flyTo({ center: pointAt(path, liveMeters()).point, zoom: CRUISE_ZOOM, pitch: 0, bearing: 0, duration: 6500, curve: 1.2 });
+  }, 2500);
+}
+
+function applyProjection() {
+  try {
+    map.setProjection({ type: flying() ? "globe" : "mercator" });
+  } catch {
+    // 오래된 브라우저에서는 평평한 지도로 그대로 보여요.
+  }
+}
+
 function openDestPicker() {
+  renderRandomKm();
   if (flying()) {
     renderFlights();
     return openModal("fly-modal");
@@ -481,7 +520,9 @@ function setFlight(city) {
   drawJourney();
   renderJourney();
   setView("map", false);
+  // 하늘길 전체를 먼저 보여주고, 출발할 공항으로 내려가요.
   setTimeout(overview, 450);
+  setTimeout(() => !session && flyCamera(), 3200);
   const sessions = Math.ceil(city.minutes / minutes);
   $("status").textContent = `✈️ ${city.name}까지 ${formatMinutes(city.minutes)} 비행! ${minutes}분 집중을 ${sessions}번 하면 도착해요`;
 }
@@ -495,13 +536,15 @@ function setTravelMode(mode) {
   path = journey ? buildPath(journey.route.coordinates) : null;
   if (flying() && streetMode) setStreetMode(false, false);
   document.body.classList.toggle("fly", flying());
+  applyProjection();
+  applySky();
   renderModeSwitch();
   if (walkerShown) paintFigure(walkerEl.querySelector(".walker-body"));
   drawJourney();
   renderJourney();
   resetClock();
   if (journey) focusWalker();
-  else if (flying()) map.easeTo({ center: [FLIGHTS.origin.lon, FLIGHTS.origin.lat], zoom: 4, pitch: 20, bearing: 0, duration: 1000 });
+  else if (flying()) map.easeTo({ center: [FLIGHTS.origin.lon, FLIGHTS.origin.lat], zoom: 11.5, pitch: 40, bearing: 0, duration: 1000 });
   $("status").textContent = flying()
     ? journey
       ? `${journey.name}까지 이어서 날아요`
@@ -513,10 +556,94 @@ function setTravelMode(mode) {
 }
 
 function renderModeSwitch() {
-  for (const b of document.querySelectorAll("#mode-switch .chip")) {
-    b.classList.toggle("active", b.dataset.mode === travelMode);
+  for (const b of document.querySelectorAll("#mode-switch .mode-card")) {
+    const on = b.dataset.mode === travelMode;
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-checked", on);
     b.disabled = !!session;
   }
+}
+
+// 모드 카드를 누르면 그 모드로 바뀌고 지도에서 바로 보여줘요. 목적지가 없으면 고르는 창을 열어요.
+function onModeTap(mode) {
+  if (session) return;
+  setTravelMode(mode);
+  setView("map", false);
+  if (!journey) setTimeout(openDestPicker, 350);
+  else setTimeout(() => focusWalker(), 50);
+}
+
+// ---------- 🎧 배경 소리 ----------
+let soundId = store.get("sound", null);
+let soundVolume = store.get("soundVolume", 0.6);
+Sound.setVolume(soundVolume);
+
+function renderSound() {
+  const on = Sound.playing();
+  const info = Sound.SOUNDS.find((x) => x.id === on);
+  $("sound-icon").textContent = info ? info.icon : "🎧";
+  $("sound-label").textContent = info ? "켜짐" : "소리";
+  $("sound-btn").classList.toggle("on", !!info);
+  const box = $("sound-options");
+  box.innerHTML = "";
+  for (const opt of [{ id: null, icon: "🔇", name: "끄기" }, ...Sound.SOUNDS]) {
+    const b = document.createElement("button");
+    b.className = `sound-option${opt.id === on ? " active" : ""}`;
+    b.innerHTML = '<span class="sound-emoji"></span><span></span>';
+    b.firstChild.textContent = opt.icon;
+    b.lastChild.textContent = opt.name;
+    b.addEventListener("click", () => chooseSound(opt.id));
+    box.appendChild(b);
+  }
+  $("sound-volume").value = soundVolume;
+}
+
+function chooseSound(id) {
+  soundId = id;
+  store.set("sound", id, { sync: false });
+  if (id) Sound.play(id);
+  else Sound.stop();
+  renderSound();
+}
+
+$("sound-btn").addEventListener("click", () => {
+  renderSound();
+  openModal("sound-modal");
+});
+$("sound-volume").addEventListener("input", (e) => {
+  soundVolume = Number(e.target.value);
+  store.set("soundVolume", soundVolume, { sync: false });
+  Sound.setVolume(soundVolume);
+});
+
+// ---------- 🎲 랜덤 목적지 ----------
+const RANDOM_KMS = [1, 3, 5, 10, 20];
+let randomKm = store.get("randomKm", 3);
+function renderRandomKm() {
+  const box = $("random-km");
+  box.innerHTML = "";
+  for (const km of RANDOM_KMS) {
+    const b = document.createElement("button");
+    b.className = `chip${km === randomKm ? " active" : ""}`;
+    b.textContent = `${km}km`;
+    b.addEventListener("click", () => {
+      randomKm = km;
+      store.set("randomKm", km, { sync: false });
+      renderRandomKm();
+    });
+    box.appendChild(b);
+  }
+  const walkMin = Math.round((randomKm / WALK_KMH) * 60);
+  $("btn-random").textContent = `${randomKm}km 안의 명소 뽑기 · 걸어서 최대 ${formatMinutes(walkMin)}`;
+}
+
+function rollDice() {
+  if (session) return;
+  if (flying()) {
+    const choices = FLIGHTS.cities.filter((c) => c.name !== journey?.name);
+    return setFlight(choices[Math.floor(Math.random() * choices.length)]);
+  }
+  randomDestination();
 }
 
 // ---------- 거리 걷기 시점 (3인칭) ----------
@@ -565,7 +692,7 @@ function streetStep() {
     setWalker(here, pointAt(path, d + 30).point);
     setLine("wm-walked", sliceTo(path, d));
     // 위에서 볼 때도 카메라가 캐릭터를 살살 따라가요. 지도를 직접 움직였다면 4초 동안은 그대로 둬요.
-    if (document.body.classList.contains("view-map") && Date.now() > lastFollow && Date.now() - userMovedAt > 4000) {
+    if ((flying() || document.body.classList.contains("view-map")) && Date.now() > Math.max(lastFollow, takeoffUntil) && Date.now() - userMovedAt > 4000) {
       const c = map.getCenter();
       map.jumpTo({ center: [c.lng + (here[0] - c.lng) * 0.06, c.lat + (here[1] - c.lat) * 0.06] });
     }
@@ -894,11 +1021,11 @@ async function searchPlaces(event) {
 
 async function randomDestination() {
   closeModal("dest-modal");
-  $("status").textContent = "근처 여행지를 고르는 중...";
+  $("status").textContent = `🎲 ${randomKm}km 안의 명소를 고르는 중...`;
   const pos = await getPosition();
   try {
-    const trip = await api(`/api/trip?lat=${pos.lat}&lon=${pos.lon}&minutes=${Math.min(60, Math.max(5, minutes))}`);
-    const d = trip.destination;
+    const res = await api(`/api/attraction?lat=${pos.lat}&lon=${pos.lon}&km=${randomKm}`);
+    const d = res.destination;
     await setJourney(d.name, d.kind, d);
   } catch {
     $("status").textContent = "여행지를 고르지 못했어요. 잠시 후 다시 시도해 주세요.";
@@ -937,6 +1064,7 @@ function setMode(mode) {
   $("btn-pause").textContent = mode === "paused" ? "계속하기" : "일시정지";
   $("minute-chips").hidden = mode !== "idle";
   $("dest-chip").disabled = mode !== "idle";
+  $("btn-dice").disabled = mode !== "idle";
   $("clock-btn").disabled = mode !== "idle";
   walkerEl.classList.toggle("walking", mode === "running");
   renderModeSwitch();
@@ -945,6 +1073,11 @@ function setMode(mode) {
 
 function start() {
   if (!journey) return openDestPicker();
+  // 지난번에 고른 소리가 있으면 집중을 시작할 때 다시 켜요 (브라우저는 버튼을 눌러야 소리를 내줘요)
+  if (soundId && !Sound.playing()) {
+    Sound.play(soundId);
+    renderSound();
+  }
   const left = journey.route.distance_m - journey.walked_m;
   if (left <= 0) return openDestPicker();
   const sessionM = speedPerMin() * minutes;
@@ -965,6 +1098,7 @@ function start() {
     : `${iga(character.name)} 출발했어요! ${character.line}`;
   setView("focus");
   resume();
+  if (flying() && session.startM <= 0) takeOff();
 }
 
 function resume() {
@@ -1078,6 +1212,10 @@ function finish() {
 
   document.title = arrived ? "🏁 도착! · 걸음모도로" : "☕ 쉬는 시간 · 걸음모도로";
   if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  if (flying() && arrived) {
+    lastFollow = Date.now() + 6000;
+    map.flyTo({ center: path.coords.at(-1), zoom: 10.5, pitch: 40, bearing: 0, duration: 5000 });
+  }
   confetti(
     flying()
       ? arrived ? ["🎉", "🛬", "✨", journey.flag] : ["☁️", "✈️", "✨"]
@@ -1623,9 +1761,11 @@ initAccount().then(() => {
 
 document.body.classList.toggle("fly", flying());
 $("dest-flag").textContent = flying() ? "✈️" : "🏁";
-for (const b of document.querySelectorAll("#mode-switch .chip")) {
-  b.addEventListener("click", () => setTravelMode(b.dataset.mode));
+for (const b of document.querySelectorAll("#mode-switch .mode-card")) {
+  b.addEventListener("click", () => onModeTap(b.dataset.mode));
 }
+$("btn-dice").addEventListener("click", rollDice);
+renderSound();
 renderModeSwitch();
 renderCharacter();
 renderMinuteChips();

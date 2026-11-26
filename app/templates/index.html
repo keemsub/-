@@ -34,15 +34,24 @@
 
   <!-- 첫 화면: 캐릭터, 큰 타이머, 시작 버튼 -->
   <main class="hero">
-    <div id="mode-switch" class="segmented mode-switch" role="radiogroup" aria-label="여행 방법">
-      <button class="chip" data-mode="walk">🚶 걷기</button>
-      <button class="chip" data-mode="fly">✈️ 여행</button>
+    <div id="mode-switch" class="mode-cards" role="radiogroup" aria-label="어떻게 갈까요">
+      <button class="mode-card" data-mode="walk" role="radio">
+        <span class="mode-icon">🚶</span>
+        <span class="mode-text"><b>걷기 모드</b><small>동네를 걸어서</small></span>
+      </button>
+      <button class="mode-card" data-mode="fly" role="radio">
+        <span class="mode-icon">✈️</span>
+        <span class="mode-text"><b>여행 모드</b><small>비행기로 해외</small></span>
+      </button>
     </div>
-    <button id="dest-chip" class="dest-chip">
-      <span id="dest-flag" class="dest-flag">🏁</span>
-      <span id="dest-name">목적지를 정해 주세요</span>
-      <span id="dest-pct" class="dest-pct"></span>
-    </button>
+    <div class="dest-row">
+      <button id="dest-chip" class="dest-chip">
+        <span id="dest-flag" class="dest-flag">🏁</span>
+        <span id="dest-name">목적지를 정해 주세요</span>
+        <span id="dest-pct" class="dest-pct"></span>
+      </button>
+      <button id="btn-dice" class="dice-btn" aria-label="랜덤 목적지">🎲<span>랜덤</span></button>
+    </div>
 
     <div class="ring">
       <svg viewBox="0 0 200 200" aria-hidden="true">
@@ -52,10 +61,15 @@
       <div id="hero-avatar" class="avatar"></div>
     </div>
 
-    <button id="clock-btn" class="clock-btn" aria-label="집중 시간 바꾸기">
-      <span id="clock" class="clock">25:00</span>
-      <span class="clock-edit" aria-hidden="true">✎</span>
-    </button>
+    <div class="clock-row">
+      <button id="clock-btn" class="clock-btn" aria-label="집중 시간 바꾸기">
+        <span id="clock" class="clock">25:00</span>
+        <span class="clock-edit" aria-hidden="true">✎</span>
+      </button>
+      <button id="sound-btn" class="sound-btn" aria-label="배경 소리">
+        <span id="sound-icon">🎧</span><small id="sound-label">소리</small>
+      </button>
+    </div>
     <p id="clock-sub" class="clock-sub">집중 준비</p>
 
     <div id="minute-chips" class="segmented" role="radiogroup" aria-label="집중 시간">
@@ -179,11 +193,12 @@
         <button class="pill primary" type="submit">검색</button>
       </form>
       <ul id="search-results" class="results"></ul>
+      <div class="random-box">
+        <p class="random-title">🎲 <b>랜덤 명소</b> <span class="muted small">지금 위치에서 이 거리 안</span></p>
+        <div id="random-km" class="segmented wide" role="radiogroup" aria-label="랜덤 거리"></div>
+        <button id="btn-random" class="cta small-cta">명소 뽑기</button>
+      </div>
       <div class="options">
-        <button id="btn-random" class="option">
-          <span class="option-emoji">🎲</span>
-          <span><b>근처 추천</b><br><span class="muted small">집중 시간 안에 닿는 공원·카페</span></span>
-        </button>
         <button id="btn-pick" class="option">
           <span class="option-emoji">📍</span>
           <span><b>지도에서 찍기</b><br><span class="muted small">원하는 곳을 직접 골라요</span></span>
@@ -193,6 +208,20 @@
   </div>
 
   <!-- 집중 시간 직접 정하기 -->
+  <!-- 배경 소리 -->
+  <div id="sound-modal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="handle"></div>
+      <div class="modal-head">
+        <p class="modal-title">🎧 집중할 때 들을 소리</p>
+        <button class="close" data-close="sound-modal" aria-label="닫기">✕</button>
+      </div>
+      <div id="sound-options" class="sound-options"></div>
+      <label class="sound-volume">🔈 <input id="sound-volume" type="range" min="0" max="1" step="0.05" value="0.6" aria-label="소리 크기"> 🔊</label>
+      <p class="muted small">음원 파일 없이 휴대폰이 직접 만드는 소리예요. 무음 모드에서는 안 들릴 수 있어요.</p>
+    </div>
+  </div>
+
   <div id="time-modal" class="modal" hidden>
     <div class="modal-card">
       <div class="handle"></div>
@@ -237,6 +266,7 @@
   <script id="flight-catalog" type="application/json">{{ flights | tojson }}</script>
   <script src="/static/vendor/maplibre/maplibre-gl.js"></script>
   <script src="/static/avatar.js"></script>
+  <script src="/static/sound.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

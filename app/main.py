@@ -17,7 +17,13 @@ from app.config import get_settings
 from app.flights import catalog as flight_catalog
 from app.isochrone import CachedProvider, DemoProvider, IsochroneProvider, OrsProvider
 from app.journey import Geocoder, NominatimGeocoder, OrsRouter, OsmFootRouter, Router
-from app.places import OverpassProvider, PlaceProvider, outer_ring, pick_destination
+from app.places import (
+    OverpassProvider,
+    PlaceProvider,
+    outer_ring,
+    pick_attraction,
+    pick_destination,
+)
 from app.weather import OpenMeteoWeather
 
 BASE_DIR = Path(__file__).parent
@@ -154,6 +160,23 @@ def trip(
         "destination": destination.to_dict(),
         "candidates": len(candidates),
     }
+
+
+@app.get("/api/attraction")
+def attraction(
+    lat: Annotated[float, Query(ge=-90, le=90, description="위도")],
+    lon: Annotated[float, Query(ge=-180, le=180, description="경도")],
+    places: Annotated[PlaceProvider, Depends(get_place_provider)],
+    km: Annotated[float, Query(ge=0.5, le=30, description="이 거리 안에서 고를게요(km)")] = 3,
+):
+    """🎲 랜덤 명소: 지금 위치에서 정한 거리 안의 볼거리 하나."""
+    radius = round(km * 1000)
+    try:
+        candidates = places.find_around(lat, lon, radius)
+    except httpx.HTTPError:
+        candidates = []  # 장소 검색이 실패해도 어딘가로는 떠나요.
+    destination = pick_attraction(candidates, lat, lon, radius)
+    return {"destination": destination.to_dict(), "candidates": len(candidates), "km": km}
 
 
 def _isochrone(provider: IsochroneProvider, lat: float, lon: float, minutes: int):
