@@ -1,4 +1,4 @@
-// 걸음모도로 화면 코드
+// 뽀모도로 화면 코드
 // 흐름: 목적지 정하기 → 집중 시작 → 캐릭터가 길을 따라 걸어감 → 집중이 끝나면 거기까지 기록
 // 목적지가 멀면(예: 제주도) 여러 번 집중해서 조금씩 이어 걸어가요.
 
@@ -1430,7 +1430,7 @@ function stop() {
   setMode("idle");
   drawJourney();
   resetClock();
-  document.title = "걸음모도로";
+  document.title = "뽀모도로";
   $("status").textContent = "이번 걸음은 기록하지 않았어요. 다음엔 끝까지 가 봐요!";
 }
 
@@ -1468,7 +1468,7 @@ function tick() {
     : `${formatDistance(d - session.startM)} 걸음`;
   renderJourney(d);
   $("ring-fill").style.strokeDashoffset = RING * (1 - progress);
-  document.title = `${clock} · 걸음모도로`;
+  document.title = `${clock} · 뽀모도로`;
 
   if (session.remainingMs <= 0) finish();
 }
@@ -1521,7 +1521,7 @@ function finish() {
   link.hidden = riding() || !arrived || journey.route.distance_m > 15000;
   link.href = `https://map.kakao.com/link/to/${encodeURIComponent(journey.name)},${end[1]},${end[0]}`;
 
-  document.title = arrived ? "🏁 도착! · 걸음모도로" : "☕ 쉬는 시간 · 걸음모도로";
+  document.title = arrived ? "🏁 도착! · 뽀모도로" : "☕ 쉬는 시간 · 뽀모도로";
   if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
   if (riding() && arrived) {
     lastFollow = Date.now() + 6000;
