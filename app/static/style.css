@@ -462,14 +462,15 @@ button { cursor: pointer; border: none; background: none; }
 
 /* ---------- 걷기 / 비행기 여행 ---------- */
 /* 모드 카드: 지금 어떤 모드인지 한눈에 보여요 */
-.mode-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: min(100%, 360px); margin-bottom: 12px; }
+.mode-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: min(100%, 400px); margin-bottom: 12px; }
 .mode-card {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  gap: 4px;
+  padding: 10px 6px;
   border-radius: 20px;
-  text-align: left;
+  text-align: center;
   background: rgb(255 255 255 / 45%);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
@@ -481,7 +482,7 @@ button { cursor: pointer; border: none; background: none; }
 .mode-card:disabled { opacity: 0.55; }
 .mode-icon { font-size: 26px; line-height: 1; filter: grayscale(0.6); transition: filter 0.2s; }
 .mode-text { display: grid; line-height: 1.2; }
-.mode-text b { font-size: 0.98rem; }
+.mode-text b { font-size: 0.92rem; white-space: nowrap; }
 .mode-text small { font-size: 0.72rem; }
 .mode-card.active { background: white; color: var(--ink); box-shadow: var(--shadow); }
 .mode-card.active .mode-icon { filter: none; }
@@ -489,6 +490,8 @@ button { cursor: pointer; border: none; background: none; }
 .mode-card.active[data-mode="fly"] { border-color: #7fb6ec; }
 .mode-card.active small { color: var(--mint-deep); }
 .mode-card.active[data-mode="fly"] small { color: #3f7fc0; }
+.mode-card.active[data-mode="train"] { border-color: #f0a08a; }
+.mode-card.active[data-mode="train"] small { color: #c45a3c; }
 
 .dest-row { display: flex; align-items: center; gap: 8px; max-width: 100%; }
 .dest-row .dest-chip { min-width: 0; }
@@ -542,9 +545,34 @@ button { cursor: pointer; border: none; background: none; }
 }
 .fly #hero-avatar.walking::before { animation-duration: 4s; }
 @keyframes clouds { to { left: 110%; } }
-/* 비행기 여행 중에는 '거리 걷기' 탭을 숨겨요 */
-.fly .tabbar { grid-template-columns: repeat(3, 1fr); }
-.fly .tab[data-tab="street"] { display: none; }
+/* 비행기·기차 여행 중에는 '거리 걷기' 탭을 숨겨요 */
+.ride .tabbar { grid-template-columns: repeat(3, 1fr); }
+.ride .tab[data-tab="street"] { display: none; }
+
+/* 🚄 기차 모드 */
+.train .walker-body, .train .walking .walker-body { animation: none; font-size: 40px; }
+.train .walking .walker-body .train-car { display: inline-block; animation: rattle 0.35s ease-in-out infinite alternate; }
+@keyframes rattle { to { translate: 0 -1.5px; } }
+/* 첫 화면 캐릭터: 기차 창가에서 산과 나무가 지나가요 */
+.train #hero-avatar {
+  background: linear-gradient(180deg, #a8dcff 0%, #dff2ff 55%, #cfeec0 56%, #9fd88a 100%);
+  box-shadow: inset 0 0 0 8px #e8eef3, inset 0 0 0 10px #b9c6d1, 0 6px 16px rgb(80 110 150 / 20%);
+  border-radius: 28px;
+  overflow: hidden;
+}
+.train #hero-avatar::before {
+  content: "🌲  ⛰️   🌳  🏘️  🌲   ⛰️  🌳";
+  white-space: pre;
+  position: absolute;
+  top: 40%;
+  left: 100%;
+  font-size: 20px;
+  pointer-events: none;
+  animation: scenery 10s linear infinite;
+}
+.train #hero-avatar.walking::before { animation-duration: 3s; }
+@keyframes scenery { to { left: -260%; } }
+.phase-night.train #hero-avatar { background: linear-gradient(180deg, #1b2450 0%, #2c3770 55%, #1d3a2a 56%, #142a1e 100%); }
 .phase-night .mode-card:not(.active), .phase-dusk .mode-card:not(.active) { background: rgb(255 255 255 / 16%); color: #e4e1f7; }
 /* 여행 모드에서 지구 바깥은 우주색 */
 .fly #map { background: radial-gradient(circle at 50% 45%, #2e4a86 0%, #142046 55%, #070b1f 100%); }
@@ -581,7 +609,7 @@ button { cursor: pointer; border: none; background: none; }
 /* 작은 화면에서는 더 촘촘하게 */
 @media (max-height: 720px) {
   .hero { gap: 10px; padding-top: calc(64px + var(--safe-top)); }
-  .mode-card { padding: 8px 10px; }
+  .mode-card { padding: 7px 6px; flex-direction: row; justify-content: center; gap: 6px; }
   .mode-icon { font-size: 22px; }
   .mode-text small { display: none; }
 }

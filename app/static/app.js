@@ -66,12 +66,22 @@ const store = {
 
 let character = CHARACTERS.find((c) => c.id === store.get("character", "turtle")) || CHARACTERS[0];
 let styleIndex = Math.max(0, MAP_STYLES.findIndex((s) => s.id === store.get("mapStyle", "liberty")));
-// 걷기(walk)와 비행기 여행(fly)은 여정을 따로 저장해요. 바꿔도 다른 쪽 진행은 그대로예요.
+// 걷기(walk)·비행기(fly)·기차(train)는 여정을 따로 저장해요. 바꿔도 다른 쪽 진행은 그대로예요.
 const FLIGHTS = JSON.parse($("flight-catalog").textContent);
-let travelMode = store.get("travelMode", "walk") === "fly" ? "fly" : "walk";
-const journeyKey = () => (travelMode === "fly" ? "flight" : "journey");
+const TRAINS = JSON.parse($("train-catalog").textContent);
+const TRAVEL_MODES = ["walk", "fly", "train"];
+let travelMode = TRAVEL_MODES.includes(store.get("travelMode", "walk")) ? store.get("travelMode", "walk") : "walk";
+const JOURNEY_KEYS = { walk: "journey", fly: "flight", train: "train" };
+const journeyKey = () => JOURNEY_KEYS[travelMode];
 let journey = store.get(journeyKey(), null);
 const flying = () => travelMode === "fly";
+// 비행기·기차처럼 '정해진 소요시간'만큼 타고 가는 모드
+const riding = () => travelMode !== "walk";
+const RIDES = {
+  fly: { icon: "✈️", arrive: "🛬", noun: "비행", verb: "날아요", did: "날았어요", go: "이륙", origin: FLIGHTS.origin, modal: "fly-modal" },
+  train: { icon: "🚄", arrive: "🚉", noun: "기차", verb: "달려요", did: "달렸어요", go: "출발", origin: TRAINS.origin, modal: "train-modal" },
+};
+const ride = () => RIDES[travelMode];
 const PRESET_MINUTES = [25, 50];
 const clampMinutes = (m) => Math.min(180, Math.max(1, Math.round(Number(m) || 25)));
 let minutes = clampMinutes(store.get("minutes", 25));
@@ -543,7 +553,7 @@ function drawJourney() {
   setLine("wm-walked", sliceTo(path, journey.walked_m));
   originMarker.setLngLat(path.coords[0]).addTo(map);
   destMarker?.remove();
-  destMarker = new maplibregl.Marker({ element: pinElement(flying() ? "🛬" : "🏁", journey.name), anchor: "bottom" })
+  destMarker = new maplibregl.Marker({ element: pinElement(riding() ? ride().arrive : "🏁", journey.name), anchor: "bottom" })
     .setLngLat(path.coords[path.coords.length - 1])
     .addTo(map);
   const here = pointAt(path, journey.walked_m).point;
@@ -555,7 +565,7 @@ function focusWalker(animate = true) {
   if (!journey || !path || streetOn()) return;
   const here = pointAt(path, session ? liveMeters() : journey.walked_m).point;
   const s = MAP_STYLES[styleIndex];
-  if (flying()) return flyCamera(animate);
+  if (riding()) return flyCamera(animate);
   lastFollow = Date.now() + 1300; // 이 이동이 끝날 때까지 따라가기를 잠시 멈춰요
   map.easeTo({ center: here, zoom: 16.2, pitch: s.pitch, bearing: -12, duration: animate ? 1200 : 0 });
 }
@@ -572,7 +582,7 @@ function overview() {
 // ---------- 걷기 / 비행기 여행 ----------
 function speedPerMin() {
   // 1분에 몇 m 가는지: 걷기는 걷는 속도, 비행은 실제 비행시간에 맞춘 속도
-  if (flying() && journey) return journey.route.distance_m / journey.flight_min;
+  if (riding() && journey?.flight_min) return journey.route.distance_m / journey.flight_min;
   return (WALK_KMH * 1000) / 60;
 }
 
@@ -582,6 +592,8 @@ function saveJourney() {
 
 // 비행 카메라: 출발 전엔 공항 활주로, 나는 중엔 지구본 위, 도착하면 도착 도시
 const CRUISE_ZOOM = 2.3; // 지구가 둥글게 보이는 높이
+const TRAIN_ZOOM = 9.2; // 기차는 창밖으로 도시와 산이 보이는 높이
+const cruiseZoom = () => (flying() ? CRUISE_ZOOM : TRAIN_ZOOM);
 let takeoffUntil = 0;
 function flyCamera(animate = true) {
   if (!journey || !path || Date.now() < takeoffUntil) return;
@@ -589,26 +601,28 @@ function flyCamera(animate = true) {
   const duration = animate ? 1600 : 0;
   lastFollow = Date.now() + duration + 100;
   if (d <= 0) {
-    map.easeTo({ center: path.coords[0], zoom: 12.6, pitch: 50, bearing: bearingBetween(path.coords[0], path.coords[4]), duration });
+    map.easeTo({ center: path.coords[0], zoom: flying() ? 12.6 : 14, pitch: 50, bearing: bearingBetween(path.coords[0], path.coords[Math.min(4, path.coords.length - 1)]), duration });
   } else if (d >= journey.route.distance_m - 1) {
     map.easeTo({ center: path.coords.at(-1), zoom: 10.5, pitch: 40, bearing: 0, duration });
   } else {
-    map.easeTo({ center: pointAt(path, d).point, zoom: CRUISE_ZOOM, pitch: 0, bearing: 0, duration });
+    map.easeTo({ center: pointAt(path, d).point, zoom: cruiseZoom(), pitch: flying() ? 0 : 35, bearing: 0, duration });
   }
 }
 
 // 활주로에서 출발해 하늘로 올라가며 지구가 보일 때까지 멀어져요.
 // 시작 버튼을 누르는 순간 바로 떠올라요: 공항에서 점점 높이 올라가며 지구가 보일 때까지.
 function takeOff() {
-  $("status").textContent = `🛫 이륙! ${journey.name}까지 지구 위를 날아가요`;
+  $("status").textContent = flying()
+    ? `🛫 이륙! ${journey.name}까지 지구 위를 날아가요`
+    : `🚄 출발! ${journey.line} 타고 ${journey.name}까지 달려요`;
   lastFollow = Date.now() + 7000;
   takeoffUntil = Date.now() + 7000;
   document.body.classList.remove("takeoff");
   void document.body.offsetWidth; // 애니메이션을 처음부터 다시
   document.body.classList.add("takeoff");
   setTimeout(() => document.body.classList.remove("takeoff"), 6500);
-  map.jumpTo({ center: path.coords[0], zoom: 12.6, pitch: 45, bearing: 0 });
-  map.flyTo({ center: pointAt(path, liveMeters() + speedPerMin() * 0.1).point, zoom: CRUISE_ZOOM, pitch: 0, bearing: 0, duration: 6000, curve: 1.3, essential: true });
+  map.jumpTo({ center: path.coords[0], zoom: flying() ? 12.6 : 14, pitch: 45, bearing: 0 });
+  map.flyTo({ center: pointAt(path, liveMeters() + speedPerMin() * 0.1).point, zoom: cruiseZoom(), pitch: flying() ? 0 : 35, bearing: 0, duration: flying() ? 6000 : 4000, curve: 1.3, essential: true });
 }
 
 function applyProjection() {
@@ -625,7 +639,12 @@ function openDestPicker() {
     renderFlights();
     return openModal("fly-modal");
   }
+  if (riding()) {
+    renderTrains();
+    return openModal("train-modal");
+  }
   openModal("dest-modal");
+  if (!pickIsFresh()) prefetchAttraction(); // 고르는 동안 🎲 명소를 미리 찾아 둬요
 }
 
 // 인천에서 도시까지 지구 곡면을 따라 그린 하늘길. 날짜변경선을 넘어도 끊기지 않게 경도를 이어 붙여요.
@@ -687,13 +706,68 @@ function setFlight(city) {
   path = built;
   saveJourney();
   drawJourney();
+  fitTimerToJourney();
   renderJourney();
   setView("map", false);
   // 하늘길 전체를 먼저 보여주고, 출발할 공항으로 내려가요.
   setTimeout(overview, 450);
   setTimeout(() => !session && flyCamera(), 3200);
   const sessions = Math.ceil(city.minutes / minutes);
-  $("status").textContent = `✈️ ${city.name}까지 ${formatMinutes(city.minutes)} 비행! ${minutes}분 집중을 ${sessions}번 하면 도착해요`;
+  $("status").textContent =
+    sessions > 1
+      ? `✈️ ${city.name}까지 ${formatMinutes(city.minutes)} 비행! ${formatMinutes(minutes)} 집중을 ${sessions}번 하면 도착해요`
+      : `✈️ ${city.name}까지 ${formatMinutes(city.minutes)} 비행! 시작 버튼을 누르면 이륙해요`;
+}
+
+function renderTrains() {
+  const list = $("train-list");
+  list.innerHTML = "";
+  for (const r of TRAINS.routes) {
+    const li = document.createElement("li");
+    const sessions = Math.max(1, Math.ceil(r.minutes / minutes));
+    li.innerHTML =
+      '<button type="button"><span class="fly-flag">🚄</span><span class="fly-main"><b></b><span class="addr"></span></span><span class="fly-time"></span></button>';
+    li.querySelector("b").textContent = r.name;
+    li.querySelector(".addr").textContent = `${r.line} · ${r.stops.length - 2 > 0 ? `${r.stops.slice(1, -1).join("·")} 지나서` : "직행"}`;
+    li.querySelector(".fly-time").textContent = formatMinutes(r.minutes);
+    li.title = `${minutes}분 집중 ${sessions}번`;
+    li.querySelector("button").addEventListener("click", () => setTrain(r));
+    list.appendChild(li);
+  }
+}
+
+function setTrain(r) {
+  closeModal("train-modal");
+  const built = buildPath(r.coords);
+  journey = {
+    kind: "train",
+    name: r.name,
+    line: r.line,
+    flag: "🚄",
+    code: r.stops.at(-1),
+    stops: r.stops,
+    flight_min: r.minutes,
+    route: { coordinates: r.coords, distance_m: Math.round(built.total), mode: "rail" },
+    walked_m: 0,
+    createdAt: Date.now(),
+  };
+  path = built;
+  saveJourney();
+  drawJourney();
+  fitTimerToJourney();
+  renderJourney();
+  setView("map", false);
+  setTimeout(overview, 450);
+  setTimeout(() => !session && flyCamera(), 3000);
+  $("status").textContent = `🚄 ${r.line} 타고 ${r.name}까지 ${formatMinutes(r.minutes)}! 시작 버튼을 누르면 출발해요`;
+}
+
+// 목적지를 정하면 '도착까지 걸리는 시간'으로 타이머를 맞춰요 (최대 3시간, 넘으면 여러 번에 나눠 가요)
+function fitTimerToJourney() {
+  if (!journey || session) return;
+  const left = journey.route.distance_m - journey.walked_m;
+  if (left <= 0) return;
+  setMinutes(Math.ceil(left / speedPerMin() - 0.01)); // 0.01은 소수점 오차로 1분 늘어나는 걸 막아요
 }
 
 function setTravelMode(mode) {
@@ -703,8 +777,10 @@ function setTravelMode(mode) {
   store.set("travelMode", mode, { sync: false });
   journey = store.get(journeyKey(), null);
   path = journey ? buildPath(journey.route.coordinates) : null;
-  if (flying() && streetMode) setStreetMode(false, false);
+  if (riding() && streetMode) setStreetMode(false, false);
   document.body.classList.toggle("fly", flying());
+  document.body.classList.toggle("train", travelMode === "train");
+  document.body.classList.toggle("ride", riding());
   applyProjection();
   applySky();
   renderModeSwitch();
@@ -712,16 +788,16 @@ function setTravelMode(mode) {
   drawJourney();
   renderJourney();
   resetClock();
-  if (journey) focusWalker();
-  else if (flying()) map.easeTo({ center: [FLIGHTS.origin.lon, FLIGHTS.origin.lat], zoom: 11.5, pitch: 40, bearing: 0, duration: 1000 });
-  $("status").textContent = flying()
-    ? journey
-      ? `${journey.name}까지 이어서 날아요`
-      : "✈️ 어느 나라로 날아갈까요? 목적지를 골라 주세요"
-    : journey
-      ? `${journey.name}까지 이어서 걸어요`
-      : "목적지를 정하고 집중을 시작해요";
-  $("dest-flag").textContent = flying() ? "✈️" : "🏁";
+  if (journey) {
+    focusWalker();
+    fitTimerToJourney();
+  } else if (riding()) {
+    const o = ride().origin;
+    map.easeTo({ center: [o.lon, o.lat], zoom: flying() ? 11.5 : 13.5, pitch: 40, bearing: 0, duration: 1000 });
+  }
+  const empty = { walk: "목적지를 정하고 집중을 시작해요", fly: "✈️ 어느 나라로 날아갈까요? 목적지를 골라 주세요", train: "🚄 서울역에서 어디로 갈까요? 목적지를 골라 주세요" };
+  $("status").textContent = journey ? `${journey.name}까지 이어서 ${riding() ? ride().verb : "걸어요"}` : empty[travelMode];
+  $("dest-flag").textContent = riding() ? ride().icon : "🏁";
 }
 
 function renderModeSwitch() {
@@ -798,6 +874,7 @@ function renderRandomKm() {
     b.addEventListener("click", () => {
       randomKm = km;
       store.set("randomKm", km, { sync: false });
+      prefetchAttraction();
       renderRandomKm();
     });
     box.appendChild(b);
@@ -811,6 +888,10 @@ function rollDice() {
   if (flying()) {
     const choices = FLIGHTS.cities.filter((c) => c.name !== journey?.name);
     return setFlight(choices[Math.floor(Math.random() * choices.length)]);
+  }
+  if (riding()) {
+    const choices = TRAINS.routes.filter((r) => r.name !== journey?.name);
+    return setTrain(choices[Math.floor(Math.random() * choices.length)]);
   }
   randomDestination();
 }
@@ -861,7 +942,7 @@ function streetStep() {
     setWalker(here, pointAt(path, d + 30).point);
     setLine("wm-walked", sliceTo(path, d));
     // 위에서 볼 때도 카메라가 캐릭터를 살살 따라가요. 지도를 직접 움직였다면 4초 동안은 그대로 둬요.
-    if ((flying() || document.body.classList.contains("view-map")) && Date.now() > Math.max(lastFollow, takeoffUntil) && Date.now() - userMovedAt > 4000) {
+    if ((riding() || document.body.classList.contains("view-map")) && Date.now() > Math.max(lastFollow, takeoffUntil) && Date.now() - userMovedAt > 4000) {
       const c = map.getCenter();
       map.jumpTo({ center: [c.lng + (here[0] - c.lng) * 0.06, c.lat + (here[1] - c.lat) * 0.06] });
     }
@@ -936,13 +1017,13 @@ function renderMapStart() {
   btn.hidden = !!session;
   btn.disabled = !ready;
   btn.textContent = ready
-    ? `▶ ${formatMinutes(minutes)} 집중 시작${flying() ? " · 이륙" : ""}`
+    ? `▶ ${formatMinutes(minutes)} 집중 시작${riding() ? ` · ${ride().go}` : ""}`
     : journey ? "도착했어요! 새 목적지를 골라 주세요" : "목적지를 먼저 골라 주세요";
 }
 
 function renderJourney(liveMeters) {
   renderMapStart();
-  $("journey-flag").textContent = flying() ? "✈️" : "🏁";
+  $("journey-flag").textContent = riding() ? ride().icon : "🏁";
   if (!journey) {
     $("dest-name").textContent = "목적지를 정해 주세요";
     $("dest-pct").textContent = "";
@@ -959,18 +1040,20 @@ function renderJourney(liveMeters) {
   const left = Math.max(0, journey.route.distance_m - walkedM);
   $("dest-name").textContent = journey.name;
   $("dest-pct").textContent = left <= 0 ? "도착" : pctText;
-  if (flying()) {
+  if (riding()) {
     const total = journey.flight_min;
     const done = walkedM / speedPerMin();
-    $("journey-name").textContent = `${journey.name} (${journey.code})`;
+    $("journey-name").textContent = flying() ? `${journey.name} (${journey.code})` : `${journey.name}역`;
     $("journey-flag").textContent = journey.flag;
     $("journey-bar").style.width = `${pct}%`;
-    $("journey-mode").textContent = `✈️ ${FLIGHTS.origin.name} → ${journey.flag} ${journey.name}`;
+    $("journey-mode").textContent = flying()
+      ? `✈️ ${FLIGHTS.origin.name} → ${journey.flag} ${journey.name}`
+      : `🚄 ${journey.line} · ${TRAINS.origin.name} → ${journey.name}`;
     $("journey-text").textContent =
-      left <= 0 ? "도착했어요! 다음 여행지를 골라 볼까요?" : `비행 ${formatMinutes(total)} 중 ${formatMinutes(Math.floor(done))} · ${pctText}`;
+      left <= 0 ? "도착했어요! 다음 여행지를 골라 볼까요?" : `${ride().noun} ${formatMinutes(total)} 중 ${formatMinutes(Math.floor(done))} · ${pctText}`;
     if (!running()) {
       const leftMin = Math.ceil(left / speedPerMin());
-      $("clock-sub").textContent = left > 0 ? `이번 집중으로 ${formatMinutes(Math.min(minutes, leftMin))} 비행` : "도착 완료";
+      $("clock-sub").textContent = left > 0 ? `이번 집중으로 ${formatMinutes(Math.min(minutes, leftMin))} ${ride().noun}` : "도착 완료";
     }
     return;
   }
@@ -1007,6 +1090,10 @@ function paintFigure(el) {
   if (el.classList.contains("walker-body") && flying()) {
     el.classList.add("figure");
     el.innerHTML = '<span class="plane-wrap"><span class="trail"></span><span class="plane">✈️</span></span>';
+    return;
+  }
+  if (el.classList.contains("walker-body") && riding()) {
+    el.innerHTML = '<span class="train-car">🚄</span>';
     return;
   }
   const back = el.classList.contains("walker-body") && streetOn();
@@ -1163,15 +1250,20 @@ async function setJourney(name, address, dest) {
     path = buildPath(route.coordinates);
     saveJourney();
     drawJourney();
+    fitTimerToJourney();
     renderJourney();
     setView("map", false);
     setTimeout(() => {
       if (!streetMode) overview(); // 거리 시점이면 바로 캐릭터 뒤에서 출발해요
     }, 450);
     const where = origin.fallback ? "서울시청에서 출발해요 (위치 권한이 없어요). " : "";
-    const sessions = Math.ceil(route.distance_m / (speedPerMin() * minutes));
+    const needMin = Math.ceil(route.distance_m / speedPerMin());
+    const sessions = Math.ceil(needMin / minutes);
     $("status").textContent =
-      `${where}${minutes}분 집중을 ${sessions.toLocaleString()}번 하면 도착해요` +
+      where +
+      (sessions > 1
+        ? `걸어서 ${formatMinutes(needMin)}! ${formatMinutes(minutes)} 집중을 ${sessions.toLocaleString()}번 하면 도착해요`
+        : `걸어서 ${formatMinutes(needMin)}! 타이머를 ${formatMinutes(minutes)}으로 맞췄어요. 시작을 눌러요`) +
       (route.mode === "straight" ? " (지도 위 직선으로 걸어가요)" : "");
   } catch {
     $("status").textContent = "가는 길을 찾지 못했어요. 잠시 후 다시 시도해 주세요.";
@@ -1200,17 +1292,35 @@ async function searchPlaces(event) {
   }
 }
 
+// 🎲 명소 뽑기는 미리 하나 골라 두었다가, 누르면 바로 써요. (서버가 주변 명소를 찾는 데 몇 초 걸려서요)
+let nextPick = null; // { km, at, promise }
+function prefetchAttraction() {
+  if (travelMode !== "walk") return;
+  const km = randomKm;
+  const promise = getPosition().then((pos) =>
+    api(`/api/attraction?lat=${pos.lat}&lon=${pos.lon}&km=${km}`),
+  );
+  promise.catch(() => {
+    if (nextPick?.promise === promise) nextPick = null;
+  });
+  nextPick = { km, at: Date.now(), promise };
+}
+
+const pickIsFresh = () => nextPick && nextPick.km === randomKm && Date.now() - nextPick.at < 5 * 60 * 1000;
+
 async function randomDestination() {
   closeModal("dest-modal");
   $("status").textContent = `🎲 ${randomKm}km 안의 명소를 고르는 중...`;
-  const pos = await getPosition();
+  if (!pickIsFresh()) prefetchAttraction();
+  const { promise } = nextPick;
+  nextPick = null;
   try {
-    const res = await api(`/api/attraction?lat=${pos.lat}&lon=${pos.lon}&km=${randomKm}`);
-    const d = res.destination;
+    const d = (await promise).destination;
     await setJourney(d.name, d.kind, d);
   } catch {
     $("status").textContent = "여행지를 고르지 못했어요. 잠시 후 다시 시도해 주세요.";
   }
+  setTimeout(prefetchAttraction, 1500); // 다음 뽑기도 미리 준비
 }
 
 let picking = false;
@@ -1269,7 +1379,7 @@ function start() {
   if (left <= 0) return openDestPicker();
   const sessionM = speedPerMin() * minutes;
   // 목적지까지 조금만 남으면 그냥 도착으로 쳐요 (걷기 100m, 비행 5분)
-  const snap = flying() ? speedPerMin() * 5 : 100;
+  const snap = riding() ? speedPerMin() * 5 : 100;
   session = {
     startM: journey.walked_m,
     targetM:
@@ -1282,12 +1392,14 @@ function start() {
   };
   $("status").textContent = flying()
     ? `✈️ ${journey.name}행 비행기가 이륙했어요! 안전벨트를 매 주세요`
-    : `${iga(character.name)} 출발했어요! ${character.line}`;
+    : riding()
+      ? `🚄 ${journey.name}행 열차가 출발했어요!`
+      : `${iga(character.name)} 출발했어요! ${character.line}`;
   // 시작하면 바로 지도에서 캐릭터가 걸어가는 모습을 봐요 (타이머는 지도 위 카드에)
   setView("map");
   resume();
   // 화면 전환(지도 여백 조정)이 끝난 다음 프레임에 이륙해야 카메라 움직임이 끊기지 않아요
-  if (flying() && session.startM <= 0) {
+  if (riding() && session.startM <= 0) {
     takeoffUntil = Date.now() + 7000;
     setTimeout(() => session && takeOff(), 80);
   }
@@ -1351,8 +1463,8 @@ function tick() {
   const clock = formatClock(session.remainingMs);
   $("clock").textContent = clock;
   $("map-clock").textContent = clock;
-  $("clock-sub").textContent = flying()
-    ? `${formatMinutes(Math.floor((d - session.startM) / speedPerMin()))} 비행`
+  $("clock-sub").textContent = riding()
+    ? `${formatMinutes(Math.floor((d - session.startM) / speedPerMin()))} ${ride().noun}`
     : `${formatDistance(d - session.startM)} 걸음`;
   renderJourney(d);
   $("ring-fill").style.strokeDashoffset = RING * (1 - progress);
@@ -1374,12 +1486,12 @@ function finish() {
   const today = store.get(dayKey, { minutes: 0, meters: 0, sessions: 0 });
   today.sessions = (today.sessions ?? 0) + 1;
   today.minutes += minutes;
-  if (!flying()) today.meters += Math.round(walked);
+  if (!riding()) today.meters += Math.round(walked);
   store.set(dayKey, today);
 
   const arrived = journey.walked_m >= journey.route.distance_m - 1;
   // 비행은 걷기와 같은 시간이면 같은 코인을 받아요 (1분 = 걸어서 75m 몫)
-  const coinMeters = flying() ? (walked / speedPerMin()) * ((WALK_KMH * 1000) / 60) : walked;
+  const coinMeters = riding() ? (walked / speedPerMin()) * ((WALK_KMH * 1000) / 60) : walked;
   const earned = Math.floor(coinMeters / CATALOG.meters_per_coin) + (arrived ? CATALOG.arrival_bonus : 0);
   coins += earned;
   store.set("coins", coins);
@@ -1388,14 +1500,16 @@ function finish() {
   $("done-coins").textContent = `🐾 발자국 코인 +${earned}`;
   const left = journey.route.distance_m - journey.walked_m;
   const end = path.coords[path.coords.length - 1];
-  if (flying()) {
-    $("done-emoji").textContent = arrived ? "🛬" : "✈️";
+  if (riding()) {
+    $("done-emoji").textContent = arrived ? ride().arrive : ride().icon;
     $("done-title").textContent = arrived
       ? `${journey.flag} ${journey.name} 도착!`
-      : `${formatMinutes(Math.round(walked / speedPerMin()))} 날았어요!`;
+      : `${formatMinutes(Math.round(walked / speedPerMin()))} ${ride().did}!`;
     $("done-text").textContent = arrived
-      ? `${FLIGHTS.origin.name}에서 ${formatMinutes(journey.flight_min)}을 날아 ${journey.country}에 왔어요. 즐거운 여행!`
-      : `${journey.name}까지 ${formatMinutes(Math.ceil(left / speedPerMin()))} 남았어요. 쉬고 나서 이어서 날아요.`;
+      ? flying()
+        ? `${FLIGHTS.origin.name}에서 ${formatMinutes(journey.flight_min)}을 날아 ${journey.country}에 왔어요. 즐거운 여행!`
+        : `${TRAINS.origin.name}에서 ${journey.line} 타고 ${formatMinutes(journey.flight_min)} 달려 ${journey.name}에 왔어요. 즐거운 여행!`
+      : `${journey.name}까지 ${formatMinutes(Math.ceil(left / speedPerMin()))} 남았어요. 쉬고 나서 이어서 ${ride().verb}.`;
   } else {
     $("done-emoji").textContent = arrived ? "🏁" : character.emoji;
     $("done-title").textContent = arrived ? `${journey.name} 도착!` : `${formatDistance(walked)} 걸었어요!`;
@@ -1404,18 +1518,18 @@ function finish() {
       : `${journey.name}까지 ${formatDistance(left)} 남았어요. 쉬고 나서 이어 걸어요.`;
   }
   const link = $("done-link");
-  link.hidden = flying() || !arrived || journey.route.distance_m > 15000;
+  link.hidden = riding() || !arrived || journey.route.distance_m > 15000;
   link.href = `https://map.kakao.com/link/to/${encodeURIComponent(journey.name)},${end[1]},${end[0]}`;
 
   document.title = arrived ? "🏁 도착! · 걸음모도로" : "☕ 쉬는 시간 · 걸음모도로";
   if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-  if (flying() && arrived) {
+  if (riding() && arrived) {
     lastFollow = Date.now() + 6000;
-    map.flyTo({ center: path.coords.at(-1), zoom: 10.5, pitch: 40, bearing: 0, duration: 5000 });
+    map.flyTo({ center: path.coords.at(-1), zoom: flying() ? 10.5 : 13, pitch: 40, bearing: 0, duration: 5000 });
   }
   confetti(
-    flying()
-      ? arrived ? ["🎉", "🛬", "✨", journey.flag] : ["☁️", "✈️", "✨"]
+    riding()
+      ? arrived ? ["🎉", ride().arrive, "✨", journey.flag] : flying() ? ["☁️", "✈️", "✨"] : ["🚄", "🌄", "✨"]
       : arrived ? ["🎉", "🏁", "✨", character.emoji] : ["✨", "🌿", character.emoji],
   );
   openModal("done-modal");
@@ -1575,7 +1689,7 @@ function setTab(tab) {
     $("status").textContent = "먼저 목적지를 정해 주세요";
     return openDestPicker();
   }
-  if (tab === "street" && flying()) {
+  if (tab === "street" && riding()) {
     tab = "map";
   }
   const wantStreet = tab === "street";
@@ -1613,8 +1727,8 @@ function renderTimePicker() {
   $("time-value").textContent = draftMinutes;
   $("time-range").value = draftMinutes;
   const meters = (WALK_KMH * 1000 * draftMinutes) / 60;
-  $("time-hint").textContent = flying()
-    ? `${formatMinutes(draftMinutes)} 동안 ${formatMinutes(draftMinutes)}만큼 날아가요`
+  $("time-hint").textContent = riding()
+    ? `${formatMinutes(draftMinutes)} 동안 ${formatMinutes(draftMinutes)}만큼 ${ride().verb}`
     : `${formatMinutes(draftMinutes)} 동안 약 ${formatDistance(meters)} 걸어요`;
   for (const c of document.querySelectorAll("#time-presets .chip")) {
     c.classList.toggle("active", Number(c.dataset.min) === draftMinutes);
@@ -1671,6 +1785,7 @@ function collectState() {
     minutes,
     journey: store.get("journey", null),
     flight: store.get("flight", null),
+    train: store.get("train", null),
     travelMode,
     days,
     avatar: { coins, owned, outfit },
@@ -1684,6 +1799,7 @@ function applyState(state) {
   if (state.minutes) store.set("minutes", state.minutes, quiet);
   store.set("journey", state.journey ?? null, quiet);
   if ("flight" in state) store.set("flight", state.flight ?? null, quiet);
+  if ("train" in state) store.set("train", state.train ?? null, quiet);
   if (state.travelMode) store.set("travelMode", state.travelMode, quiet);
   for (const [day, record] of Object.entries(state.days || {})) store.set(`day:${day}`, record, quiet);
   if (state.avatar) {
@@ -1713,6 +1829,18 @@ async function syncNow() {
   }
 }
 
+// 로그아웃하면 이 기기에서 계정 기록(코인·옷·여정·통계)을 지워요. 다음 사람이 이어 쓰지 않게요.
+// 지도 모양·소리 같은 기기 설정은 남겨요. 기록은 서버에 있어서 다시 로그인하면 돌아와요.
+const ACCOUNT_KEYS = ["journey", "flight", "train", "coins", "owned", "outfit", "character", "minutes", "travelMode", "syncedRev"];
+function clearAccountData() {
+  clearTimeout(syncTimer);
+  try {
+    for (const key of [...ACCOUNT_KEYS, ...store.keys("day:")]) localStorage.removeItem(`walkmodoro:${key}`);
+  } catch {
+    // 저장소가 막혀 있으면 지울 것도 없어요
+  }
+}
+
 function renderAccount() {
   const box = $("account");
   box.innerHTML = "";
@@ -1727,10 +1855,13 @@ function renderAccount() {
     row.innerHTML = '<div><p class="account-name"></p><p class="muted small">기록이 계정에 저장되고 있어요</p></div><button class="pill">로그아웃</button>';
     row.querySelector(".account-name").textContent = `${me.user.nickname || "걷는 친구"}님`;
     row.querySelector("button").addEventListener("click", async () => {
+      if (syncTimer) {
+        clearTimeout(syncTimer);
+        await syncNow(); // 아직 안 올라간 기록을 먼저 서버에 저장해요
+      }
       await fetch("/auth/logout", { method: "POST" });
-      me.user = null;
-      store.set("syncedRev", 0);
-      renderAccount();
+      clearAccountData();
+      location.reload();
     });
     box.appendChild(row);
 
@@ -1754,10 +1885,8 @@ function renderAccount() {
         del.textContent = "삭제하지 못했어요. 다시 시도해 주세요.";
         return;
       }
-      me.user = null;
-      store.set("syncedRev", 0);
-      renderAccount();
-      $("status").textContent = "계정을 삭제했어요. 이 기기의 기록은 그대로 남아 있어요.";
+      clearAccountData();
+      location.reload();
     });
     box.appendChild(del);
     return;
@@ -1972,12 +2101,19 @@ initAccount().then(() => {
 });
 
 document.body.classList.toggle("fly", flying());
-$("dest-flag").textContent = flying() ? "✈️" : "🏁";
+document.body.classList.toggle("train", travelMode === "train");
+document.body.classList.toggle("ride", riding());
+$("dest-flag").textContent = riding() ? ride().icon : "🏁";
 for (const b of document.querySelectorAll("#mode-switch .mode-card")) {
   b.addEventListener("click", () => onModeTap(b.dataset.mode));
 }
 $("btn-dice").addEventListener("click", rollDice);
 $("map-start").addEventListener("click", start);
+// 위치 권한을 이미 받았다면 첫 🎲 뽑기도 미리 준비해요 (권한 창을 갑자기 띄우지는 않아요)
+navigator.permissions
+  ?.query({ name: "geolocation" })
+  .then((p) => p.state === "granted" && setTimeout(prefetchAttraction, 3000))
+  .catch(() => {});
 renderSound();
 renderModeSwitch();
 renderCharacter();
@@ -2000,7 +2136,7 @@ renderToday();
 setMode("idle");
 if (journey) {
   map.once("load", () => focusWalker(false));
-  $("status").textContent = `${journey.name}까지 이어서 ${flying() ? "날아요" : "걸어요"}`;
+  $("status").textContent = `${journey.name}까지 이어서 ${riding() ? ride().verb : "걸어요"}`;
 } else {
   $("status").textContent = "목적지를 정하고 집중을 시작해요";
   getPosition().then((p) => map.jumpTo({ center: [p.lon, p.lat] }));

@@ -1,5 +1,6 @@
 """서버의 시작점. `uv run uvicorn app.main:app --reload` 로 실행합니다."""
 
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
@@ -19,11 +20,13 @@ from app.isochrone import CachedProvider, DemoProvider, IsochroneProvider, OrsPr
 from app.journey import Geocoder, NominatimGeocoder, OrsRouter, OsmFootRouter, Router
 from app.places import (
     OverpassProvider,
+    Place,
     PlaceProvider,
     outer_ring,
     pick_attraction,
     pick_destination,
 )
+from app.trains import catalog as train_catalog
 from app.weather import OpenMeteoWeather
 
 BASE_DIR = Path(__file__).parent
@@ -70,7 +73,9 @@ def get_router() -> Router:
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     return templates.TemplateResponse(
-        request, "index.html", {"avatar": catalog(), "flights": flight_catalog()}
+        request,
+        "index.html",
+        {"avatar": catalog(), "flights": flight_catalog(), "trains": train_catalog()},
     )
 
 
@@ -162,6 +167,9 @@ def trip(
     }
 
 
+_ATTRACTION_CACHE: dict[tuple, tuple[float, list]] = {}
+
+
 @app.get("/api/attraction")
 def attraction(
     lat: Annotated[float, Query(ge=-90, le=90, description="위도")],
@@ -172,10 +180,21 @@ def attraction(
 ):
     """🎲 랜덤 명소: 지금 위치에서 정한 거리 안의 볼거리 하나."""
     radius = round(km * 1000)
-    try:
-        candidates = places.find_around(lat, lon, radius)
-    except httpx.HTTPError:
-        candidates = []  # 장소 검색이 실패해도 어딘가로는 떠나요.
+    # 같은 동네(약 1km)·같은 거리면 6시간 동안 찾아 둔 명소 목록을 다시 써요 → 두 번째부터는 즉시
+    key = (round(lat, 2), round(lon, 2), radius)
+    cached = _ATTRACTION_CACHE.get(key)
+    if cached and time.monotonic() - cached[0] < 6 * 3600:
+        candidates = [Place(p.name, p.kind, p.lat, p.lon) for p in cached[1]]
+    else:
+        try:
+            candidates = places.find_around(lat, lon, radius)
+            if candidates:
+                if len(_ATTRACTION_CACHE) > 300:
+                    _ATTRACTION_CACHE.clear()
+                _ATTRACTION_CACHE[key] = (time.monotonic(), candidates)
+                candidates = [Place(p.name, p.kind, p.lat, p.lon) for p in candidates]
+        except httpx.HTTPError:
+            candidates = []  # 장소 검색이 실패해도 어딘가로는 떠나요.
     destination = pick_attraction(candidates, lat, lon, radius)
     if destination.kind == "미지의 장소":
         # 명소를 못 찾았으면 그 지점의 실제 지명(공원·건물·동네+길 이름)을 붙여요

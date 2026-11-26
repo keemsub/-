@@ -1,6 +1,7 @@
 import random
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
 
 from app.journey import place_name
@@ -25,6 +26,15 @@ class FakeAround:
         if self.fail:
             raise httpx.ConnectError("down")
         return [Place(p.name, p.kind, p.lat, p.lon) for p in self.places]
+
+
+@pytest.fixture(autouse=True)
+def _fresh_cache():
+    from app.main import _ATTRACTION_CACHE
+
+    _ATTRACTION_CACHE.clear()
+    yield
+    _ATTRACTION_CACHE.clear()
 
 
 class FakeGeocoder:
@@ -125,3 +135,42 @@ def test_overpass_tries_next_mirror_when_busy():
     places = provider.find_around(*ORIGIN, 3000)
     assert [p.name for p in places] == ["경복궁"]
     assert tried[:2] == OVERPASS_MIRRORS[:2]
+
+
+def test_attraction_reuses_cached_candidates():
+    from app.main import _ATTRACTION_CACHE
+
+    _ATTRACTION_CACHE.clear()
+    fake = FakeAround([Place("경복궁", "성곽·궁궐", 37.5796, 126.9770)])
+    assert _get(fake, 3).json()["destination"]["name"] == "경복궁"
+    fake.fail = True  # 두 번째는 서버에 묻지 않아도 돼요
+    assert _get(fake, 3).json()["destination"]["name"] == "경복궁"
+    _ATTRACTION_CACHE.clear()
+
+
+def test_overpass_asks_mirrors_when_primary_is_slow():
+    import time as _time
+
+    def handler(request):
+        if str(request.url) == OVERPASS_MIRRORS[0]:
+            _time.sleep(1.0)
+            return httpx.Response(200, json={"elements": []})
+        return httpx.Response(
+            200,
+            json={
+                "elements": [
+                    {
+                        "type": "node",
+                        "lat": 37.58,
+                        "lon": 126.977,
+                        "tags": {"name": "빠른 공원", "leisure": "park"},
+                    },
+                ]
+            },
+        )
+
+    provider = OverpassProvider(client=httpx.Client(transport=httpx.MockTransport(handler)))
+    start = _time.monotonic()
+    places = provider._ask_fast("q", head_start=0.1)
+    assert [p.name for p in places] == ["빠른 공원"]
+    assert _time.monotonic() - start < 0.9
