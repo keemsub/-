@@ -16,7 +16,7 @@
 - [uv](https://docs.astral.sh/uv/getting-started/installation/) 설치: 파이썬 버전과 패키지를 알아서 관리해 주는 도구예요.
   - macOS / Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`
   - Windows (PowerShell): `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
-- 이 저장소 내려받기: `git clone https://github.com/keemsub/-.git walkmodoro && cd walkmodoro`
+- 이 저장소 내려받기: `git clone https://github.com/keemsub/walkmodoro.git && cd walkmodoro`
 
 ### 2. 패키지 설치
 
