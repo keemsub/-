@@ -25,6 +25,22 @@ KINDS: dict[tuple[str, str], str] = {
     ("tourism", "gallery"): "갤러리",
 }
 
+# '랜덤 명소'에서 찾는 볼거리 (동네 카페보다 일부러 찾아갈 만한 곳)
+ATTRACTIONS: dict[tuple[str, str], str] = {
+    ("tourism", "attraction"): "명소",
+    ("tourism", "viewpoint"): "전망 좋은 곳",
+    ("tourism", "museum"): "박물관",
+    ("tourism", "gallery"): "갤러리",
+    ("tourism", "zoo"): "동물원",
+    ("tourism", "aquarium"): "아쿠아리움",
+    ("tourism", "theme_park"): "놀이공원",
+    ("historic", "castle"): "성곽·궁궐",
+    ("historic", "monument"): "기념물",
+    ("leisure", "park"): "공원",
+    ("leisure", "garden"): "정원",
+    ("natural", "peak"): "산봉우리",
+}
+
 
 @dataclass
 class Place:
@@ -41,6 +57,8 @@ class Place:
 class PlaceProvider(Protocol):
     def find_places(self, ring: list[list[float]]) -> list[Place]: ...
 
+    def find_around(self, lat: float, lon: float, radius_m: int) -> list[Place]: ...
+
 
 class OverpassProvider:
     def __init__(self, client: httpx.Client | None = None, max_points: int = 40) -> None:
@@ -54,6 +72,16 @@ class OverpassProvider:
         response = self.client.post(OVERPASS_URL, data={"data": query})
         response.raise_for_status()
         return [p for el in response.json().get("elements", []) if (p := _to_place(el))]
+
+    def find_around(self, lat: float, lon: float, radius_m: int) -> list[Place]:
+        """내 위치에서 radius_m 안에 있는 명소들."""
+        around = f"around:{radius_m},{lat:.5f},{lon:.5f}"
+        filters = "".join(f'nwr["{k}"="{v}"]["name"]({around});' for k, v in ATTRACTIONS)
+        query = f"[out:json][timeout:15];({filters});out center 300;"
+        response = self.client.post(OVERPASS_URL, data={"data": query})
+        response.raise_for_status()
+        elements = response.json().get("elements", [])
+        return [p for el in elements if (p := _to_place(el, ATTRACTIONS))]
 
 
 def pick_destination(
@@ -81,6 +109,34 @@ def pick_destination(
     return Place("이름 모를 골목 끝", "미지의 장소", lat, lon, distance)
 
 
+def pick_attraction(
+    places: list[Place],
+    origin_lat: float,
+    origin_lon: float,
+    radius_m: int,
+    rng: random.Random | None = None,
+) -> Place:
+    """정한 거리 안의 명소 중 하나를 랜덤으로. 너무 가까운 곳(거리의 40% 미만)은 되도록 빼요.
+
+    명소가 하나도 없으면 정한 거리의 70% 지점 아무 방향을 '이름 모를 장소'로 돌려줘요.
+    """
+    rng = rng or random.Random()
+    for p in places:
+        p.distance_m = round(haversine_m(origin_lat, origin_lon, p.lat, p.lon))
+    inside = [p for p in places if 0 < p.distance_m <= radius_m]
+    # 같은 이름(큰 공원의 여러 조각 등)은 한 번만
+    unique = list({p.name: p for p in inside}.values())
+    far = [p for p in unique if p.distance_m >= radius_m * 0.4]
+    if far or unique:
+        return rng.choice(far or unique)
+
+    angle = rng.uniform(0, 2 * math.pi)
+    dist = radius_m * 0.7
+    lat = origin_lat + (dist * math.cos(angle)) / 111_320
+    lon = origin_lon + (dist * math.sin(angle)) / (111_320 * math.cos(math.radians(origin_lat)))
+    return Place("이름 모를 장소", "미지의 장소", lat, lon, round(dist))
+
+
 def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """두 좌표 사이의 직선 거리(미터)."""
     r = 6_371_000
@@ -105,12 +161,12 @@ def _poly_string(ring: list[list[float]], max_points: int) -> str:
     return " ".join(f"{pt[1]:.5f} {pt[0]:.5f}" for pt in ring[::step])
 
 
-def _to_place(element: dict[str, Any]) -> Place | None:
+def _to_place(element: dict[str, Any], kinds: dict[tuple[str, str], str] = KINDS) -> Place | None:
     tags = element.get("tags", {})
     name = tags.get("name:ko") or tags.get("name")
     lat = element.get("lat") or element.get("center", {}).get("lat")
     lon = element.get("lon") or element.get("center", {}).get("lon")
-    kind = next((label for (k, v), label in KINDS.items() if tags.get(k) == v), None)
+    kind = next((label for (k, v), label in kinds.items() if tags.get(k) == v), None)
     if not (name and lat and lon and kind):
         return None
     return Place(name=name, kind=kind, lat=lat, lon=lon)
