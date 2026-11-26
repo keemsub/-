@@ -18,7 +18,9 @@ const CHARACTERS = [
   { id: "duck", emoji: "🦆", name: "오리", line: "물가를 좋아해요" },
 ];
 
+// 'cute'는 직접 만든 단순한 지도예요 (app/static/map/cute.json): 파스텔 색, 큰 길만, 도시 이름만.
 const MAP_STYLES = [
+  { id: "cute", name: "귀여운", url: "/static/map/cute.json", pitch: 40 },
   { id: "liberty", name: "3D 거리", url: "https://tiles.openfreemap.org/styles/liberty", pitch: 55 },
   { id: "positron", name: "파스텔", url: "https://tiles.openfreemap.org/styles/positron", pitch: 45 },
   { id: "bright", name: "선명", url: "https://tiles.openfreemap.org/styles/bright", pitch: 50 },
@@ -65,7 +67,7 @@ const store = {
 };
 
 let character = CHARACTERS.find((c) => c.id === store.get("character", "turtle")) || CHARACTERS[0];
-let styleIndex = Math.max(0, MAP_STYLES.findIndex((s) => s.id === store.get("mapStyle", "liberty")));
+let styleIndex = Math.max(0, MAP_STYLES.findIndex((s) => s.id === store.get("mapLook", "cute")));
 // 걷기(walk)·비행기(fly)·기차(train)는 여정을 따로 저장해요. 바꿔도 다른 쪽 진행은 그대로예요.
 const FLIGHTS = JSON.parse($("flight-catalog").textContent);
 const TRAINS = JSON.parse($("train-catalog").textContent);
@@ -221,15 +223,16 @@ function addOverlays() {
   const has3d = style.layers.some((l) => l.type === "fill-extrusion");
   if (!has3d && style.sources.openmaptiles) {
     const firstLabel = style.layers.find((l) => l.type === "symbol")?.id;
+    const cute = MAP_STYLES[styleIndex].id === "cute";
     map.addLayer(
       {
         id: "wm-buildings-3d",
         type: "fill-extrusion",
         source: "openmaptiles",
         "source-layer": "building",
-        minzoom: 14,
+        minzoom: cute ? 15.5 : 14,
         paint: {
-          "fill-extrusion-color": "#efe7da",
+          "fill-extrusion-color": cute ? "#f8e6d4" : "#efe7da",
           "fill-extrusion-height": ["coalesce", ["get", "render_height"], 8],
           "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
           "fill-extrusion-opacity": 0.85,
@@ -421,7 +424,7 @@ function nightColorFor(layer) {
   if (/water|ocean|river|lake/.test(id)) return NIGHT.water;
   if (/park|grass|wood|forest|landcover|scrub|wetland|green|pitch|golf/.test(id)) return NIGHT.green;
   if (/building/.test(id)) return NIGHT.building;
-  if (/rail|transit/.test(id)) return NIGHT.rail;
+  if (/rail|transit|boundary/.test(id)) return NIGHT.rail;
   if (/motorway|trunk|primary/.test(id)) return NIGHT.major;
   if (/road|street|highway|path|bridge|tunnel|minor|service|track|secondary|tertiary/.test(id)) return NIGHT.road;
   return NIGHT.land;
@@ -1623,7 +1626,7 @@ function renderSettings() {
     btn.addEventListener("click", () => {
       if (i === styleIndex) return;
       styleIndex = i;
-      store.set("mapStyle", st.id);
+      store.set("mapLook", st.id);
       map.setStyle(st.url);
       map.easeTo({ pitch: st.pitch, duration: 800 });
       renderSettings();
@@ -1781,7 +1784,7 @@ function collectState() {
   for (const key of store.keys("day:")) days[key.slice(4)] = store.get(key, null);
   return {
     character: character.id,
-    mapStyle: MAP_STYLES[styleIndex].id,
+    mapLook: MAP_STYLES[styleIndex].id,
     minutes,
     journey: store.get("journey", null),
     flight: store.get("flight", null),
@@ -1795,7 +1798,7 @@ function collectState() {
 function applyState(state) {
   const quiet = { sync: false };
   if (state.character) store.set("character", state.character, quiet);
-  if (state.mapStyle) store.set("mapStyle", state.mapStyle, quiet);
+  if (state.mapLook) store.set("mapLook", state.mapLook, quiet);
   if (state.minutes) store.set("minutes", state.minutes, quiet);
   store.set("journey", state.journey ?? null, quiet);
   if ("flight" in state) store.set("flight", state.flight ?? null, quiet);
