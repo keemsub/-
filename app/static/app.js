@@ -74,13 +74,36 @@ let minutes = clampMinutes(store.get("minutes", 25));
 const CATALOG = JSON.parse($("avatar-catalog").textContent);
 const ITEMS = Object.fromEntries(CATALOG.items.map((i) => [i.id, i]));
 const SLOTS = [
+  { id: "hair", name: "머리" },
+  { id: "top", name: "옷" },
   { id: "hat", name: "모자" },
   { id: "neck", name: "목" },
   { id: "bag", name: "가방" },
-  { id: "color", name: "색깔" },
+  { id: "color", name: "색" },
 ];
-const DEFAULT_OUTFIT = { hat: null, neck: null, bag: null, color: "color-mint" };
-let outfit = { ...DEFAULT_OUTFIT, ...store.get("outfit", {}) };
+const DEFAULT_OUTFIT = {
+  hair: "hair-short",
+  top: "top-tee",
+  hat: null,
+  neck: null,
+  bag: null,
+  color: "color-mint",
+  skin: CATALOG.skin_tones[1],
+  hairColor: CATALOG.hair_colors[0],
+  topColor: CATALOG.top_colors[0],
+};
+// 저장된 옷차림 중 지금 목록에 없는 값은 기본값으로 돌려놔요.
+function cleanOutfit(saved) {
+  const o = { ...DEFAULT_OUTFIT, ...(saved || {}) };
+  for (const slot of ["hair", "top", "hat", "neck", "bag", "color"]) {
+    if (o[slot] !== null && ITEMS[o[slot]]?.slot !== slot) o[slot] = DEFAULT_OUTFIT[slot];
+  }
+  if (!CATALOG.skin_tones.includes(o.skin)) o.skin = DEFAULT_OUTFIT.skin;
+  if (!CATALOG.hair_colors.includes(o.hairColor)) o.hairColor = DEFAULT_OUTFIT.hairColor;
+  if (!CATALOG.top_colors.includes(o.topColor)) o.topColor = DEFAULT_OUTFIT.topColor;
+  return o;
+}
+let outfit = cleanOutfit(store.get("outfit", {}));
 let owned = store.get("owned", []);
 let coins = store.get("coins", null);
 if (coins === null) {
@@ -89,7 +112,7 @@ if (coins === null) {
   coins = Math.floor(meters / CATALOG.meters_per_coin);
   store.set("coins", coins, { sync: false });
 }
-let closetSlot = "hat";
+let closetSlot = "hair";
 
 let me = null; // 로그인 정보 (/api/me)
 let syncTimer = null;
@@ -362,18 +385,11 @@ function renderToday() {
 
 const hasItem = (item) => (item.price === 0 && !item.premium) || owned.includes(item.id);
 
-// 캐릭터 위에 모자·목·가방을 겹쳐 그려요. 크기는 글자 크기(em)를 따라가요.
+// 사람 아바타(SVG)를 그리고, 같이 걷는 친구(동물)를 발치에 둬요. 크기는 글자 크기(em)를 따라가요.
 function paintFigure(el) {
-  el.innerHTML = '<span class="fig-body"></span>';
-  el.querySelector(".fig-body").textContent = character.emoji;
-  for (const slot of ["hat", "neck", "bag"]) {
-    const item = ITEMS[outfit[slot]];
-    if (!item) continue;
-    const layer = document.createElement("span");
-    layer.className = `fig-${slot}`;
-    layer.textContent = item.icon;
-    el.appendChild(layer);
-  }
+  el.classList.add("figure");
+  el.innerHTML = `${Avatar.svg(outfit)}<span class="fig-pet"></span>`;
+  el.querySelector(".fig-pet").textContent = character.emoji;
 }
 
 function renderCharacter() {
@@ -381,12 +397,18 @@ function renderCharacter() {
   for (const id of ["hero-avatar", "closet-preview"]) {
     const box = $(id);
     box.style.setProperty("--av-color", color);
-    box.innerHTML = '<span class="figure hero-char"></span>';
+    box.innerHTML = '<span class="hero-char"></span>';
     paintFigure(box.firstChild);
   }
   if (walkerShown) paintFigure(walkerEl.querySelector(".walker-body"));
   $("coin-count").textContent = coins.toLocaleString();
 }
+
+const PALETTES = [
+  { key: "skin", name: "피부", colors: CATALOG.skin_tones },
+  { key: "hairColor", name: "머리색", colors: CATALOG.hair_colors },
+  { key: "topColor", name: "옷 색", colors: CATALOG.top_colors },
+];
 
 function renderCloset() {
   $("closet-coins").textContent = coins.toLocaleString();
@@ -403,10 +425,39 @@ function renderCloset() {
     tabs.appendChild(btn);
   }
 
+  // '색' 칸: 피부·머리색·옷 색은 코인 없이 마음대로 골라요.
+  const palette = $("palette");
+  palette.innerHTML = "";
+  palette.hidden = closetSlot !== "color";
+  if (closetSlot === "color") {
+    for (const p of PALETTES) {
+      const row = document.createElement("div");
+      row.className = "palette-row";
+      row.innerHTML = '<span class="palette-name"></span><div class="swatches"></div>';
+      row.querySelector(".palette-name").textContent = p.name;
+      for (const c of p.colors) {
+        const sw = document.createElement("button");
+        sw.className = `swatch-btn${outfit[p.key] === c ? " active" : ""}`;
+        sw.style.background = c;
+        sw.setAttribute("aria-label", `${p.name} ${c}`);
+        sw.addEventListener("click", () => {
+          outfit = { ...outfit, [p.key]: c };
+          store.set("outfit", outfit);
+          renderCharacter();
+          renderCloset();
+        });
+        row.querySelector(".swatches").appendChild(sw);
+      }
+      palette.appendChild(row);
+    }
+  }
+
   const grid = $("item-grid");
   grid.innerHTML = "";
   const items = CATALOG.items.filter((i) => i.slot === closetSlot);
-  if (closetSlot !== "color") items.unshift({ id: null, slot: closetSlot, name: "없음", icon: "🚫", price: 0 });
+  if (["hat", "neck", "bag"].includes(closetSlot)) {
+    items.unshift({ id: null, slot: closetSlot, name: "없음", icon: "", price: 0 });
+  }
   for (const item of items) {
     const btn = document.createElement("button");
     btn.dataset.id = item.id ?? "";
@@ -419,7 +470,9 @@ function renderCloset() {
       icon.classList.add("swatch");
       icon.style.background = item.icon;
     } else {
-      icon.textContent = item.icon;
+      // 지금 모습에 이 아이템을 입혀 본 미리보기
+      icon.classList.add("try-on");
+      icon.innerHTML = Avatar.svg({ ...outfit, [item.slot]: item.id });
     }
     btn.querySelector(".name").textContent = item.name;
     btn.querySelector(".tag").textContent = worn
@@ -447,7 +500,7 @@ function chooseItem(item, mine) {
     owned = [...owned, item.id];
     store.set("coins", coins);
     store.set("owned", owned);
-    confetti([item.icon.startsWith("#") ? "🐾" : item.icon, "✨"]);
+    confetti([item.icon.startsWith("#") ? "🐾" : item.icon, "✨", "🐾"]);
   }
   outfit = { ...outfit, [item.slot]: item.id };
   store.set("outfit", outfit);

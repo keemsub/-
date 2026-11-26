@@ -1,14 +1,20 @@
 """나만의 아바타: 꾸미기 아이템 목록과 발자국 코인 규칙.
 
-아이템을 추가하고 싶으면 아래 ITEMS 목록에 한 줄만 더 쓰면 돼요.
-- slot: 어디에 입히는지 (hat 모자, neck 목, bag 가방, color 배경색)
+아바타는 둥근 머리의 귀여운 사람 캐릭터예요. 그림은 app/static/avatar.js가 그려요.
+아이템을 추가하고 싶으면 아래 ITEMS 목록에 한 줄을 더 쓰고, avatar.js에 그 모양을 그려 주면 돼요.
+- slot: 어디에 입히는지 (hair 머리, top 옷, hat 모자, neck 목, bag 가방, color 배경색)
 - price: 발자국 코인 가격 (0이면 처음부터 가지고 있어요)
 - premium: True면 나중에 유료로 팔 아이템이에요. 지금은 '곧 만나요'로만 보여요.
 """
 
 from dataclasses import asdict, dataclass
 
-SLOTS = ("hat", "neck", "bag", "color")
+SLOTS = ("hair", "top", "hat", "neck", "bag", "color")
+
+# 코인 없이 마음대로 고르는 색 (피부, 머리색, 옷 색)
+SKIN_TONES = ["#ffe6d5", "#f7d2b4", "#e9b892", "#c98f69", "#8f5c3e"]
+HAIR_COLORS = ["#3d2c25", "#1f1b1d", "#7b4b2e", "#d6a25c", "#e5836d", "#8f7fd6", "#6fbf9a"]
+TOP_COLORS = ["#7fcfa8", "#ffb4a2", "#9cc7f0", "#f6d365", "#c3b1f0", "#fdfaf5", "#4f5d7e"]
 METERS_PER_COIN = 100  # 100m 걸을 때마다 발자국 코인 1개
 ARRIVAL_BONUS = 10  # 목적지에 도착하면 보너스
 
@@ -24,6 +30,22 @@ class Item:
 
 
 ITEMS: list[Item] = [
+    # 머리 모양
+    Item("hair-short", "hair", "짧은 머리", "💇", 0),
+    Item("hair-bob", "hair", "단발", "💇", 0),
+    Item("hair-long", "hair", "긴 머리", "💇", 0),
+    Item("hair-bun", "hair", "똥머리", "💇", 30),
+    Item("hair-spiky", "hair", "삐죽 머리", "💇", 30),
+    Item("hair-curly", "hair", "곱슬 머리", "💇", 40),
+    Item("hair-pigtails", "hair", "양갈래", "💇", 50),
+    # 옷
+    Item("top-tee", "top", "티셔츠", "👕", 0),
+    Item("top-stripe", "top", "줄무늬 티", "👕", 25),
+    Item("top-hoodie", "top", "후드티", "🧥", 40),
+    Item("top-overalls", "top", "멜빵바지", "👖", 60),
+    Item("top-dress", "top", "원피스", "👗", 60),
+    Item("top-raincoat", "top", "우비", "🧥", 80),
+    Item("top-cape", "top", "망토", "🦸", 0, premium=True),
     # 모자
     Item("hat-cap", "hat", "야구모자", "🧢", 20),
     Item("hat-ribbon", "hat", "리본", "🎀", 30),
@@ -58,6 +80,9 @@ def catalog() -> dict:
     """화면에 넘겨줄 아이템 목록과 코인 규칙."""
     return {
         "items": [asdict(item) for item in ITEMS],
+        "skin_tones": SKIN_TONES,
+        "hair_colors": HAIR_COLORS,
+        "top_colors": TOP_COLORS,
         "meters_per_coin": METERS_PER_COIN,
         "arrival_bonus": ARRIVAL_BONUS,
     }
