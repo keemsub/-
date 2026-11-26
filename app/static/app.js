@@ -20,8 +20,8 @@ const CHARACTERS = [
 
 const MAP_STYLES = [
   { id: "liberty", name: "3D 거리", url: "https://tiles.openfreemap.org/styles/liberty", pitch: 55 },
-  { id: "positron", name: "밝은 지도", url: "https://tiles.openfreemap.org/styles/positron", pitch: 45 },
-  { id: "bright", name: "선명한 지도", url: "https://tiles.openfreemap.org/styles/bright", pitch: 50 },
+  { id: "positron", name: "파스텔", url: "https://tiles.openfreemap.org/styles/positron", pitch: 45 },
+  { id: "bright", name: "선명", url: "https://tiles.openfreemap.org/styles/bright", pitch: 50 },
 ];
 
 const $ = (id) => document.getElementById(id);
@@ -32,7 +32,7 @@ const josa = (word, withBatchim, without) => {
 };
 const iga = (w) => `${w}${josa(w, "이", "가")}`;
 const wagwa = (w) => `${w}${josa(w, "과", "와")}`;
-const RING = 2 * Math.PI * 52;
+const RING = 2 * Math.PI * 92;
 
 // ---------- 저장 (브라우저 localStorage) ----------
 const store = {
@@ -191,14 +191,10 @@ map.on("style.load", addOverlays);
 
 // 아래 카드에 가리지 않도록 지도의 '가운데'를 카드 위쪽으로 올려요.
 function updatePadding() {
-  const sheet = document.querySelector(".sheet");
-  const wide = innerWidth >= 900;
-  map.setPadding({
-    top: 70,
-    bottom: wide ? 0 : sheet.offsetHeight + 12,
-    left: wide ? sheet.offsetWidth + 24 : 0,
-    right: 0,
-  });
+  // 지도 크게 보기에서는 아래 카드만큼 비워 두고, 집중 화면에서는 가운데 그대로
+  const card = document.querySelector(".map-card");
+  const mapView = document.body.classList.contains("view-map");
+  map.setPadding({ top: 70, bottom: mapView ? card.offsetHeight + 14 : 0, left: 0, right: 0 });
 }
 addEventListener("resize", updatePadding);
 
@@ -284,36 +280,62 @@ function overview() {
 
 // ---------- 여정 표시 ----------
 function renderJourney(liveMeters) {
-  $("journey-empty").hidden = !!journey;
-  $("journey-set").hidden = !journey;
-  $("btn-overview").hidden = !journey;
-  if (!journey) return;
+  if (!journey) {
+    $("dest-name").textContent = "목적지를 정해 주세요";
+    $("dest-pct").textContent = "";
+    $("journey-name").textContent = "목적지 없음";
+    $("journey-mode").textContent = "";
+    $("journey-text").textContent = "돌아가서 목적지를 정해 주세요";
+    $("journey-bar").style.width = "0";
+    if (!running()) $("clock-sub").textContent = "집중 준비";
+    return;
+  }
   const walkedM = liveMeters ?? journey.walked_m;
   const pct = Math.min(100, (walkedM / journey.route.distance_m) * 100 || 0);
+  const pctText = `${pct.toFixed(pct < 1 ? 1 : 0)}%`;
+  const left = Math.max(0, journey.route.distance_m - walkedM);
+  $("dest-name").textContent = journey.name;
+  $("dest-pct").textContent = left <= 0 ? "도착" : pctText;
   $("journey-name").textContent = journey.name;
   $("journey-bar").style.width = `${pct}%`;
-  const left = Math.max(0, journey.route.distance_m - walkedM);
   $("journey-text").textContent =
     left <= 0
       ? "도착했어요! 새 목적지를 정해 볼까요?"
-      : `${formatDistance(journey.route.distance_m)} 중 ${formatDistance(walkedM)} 걸음 · ${pct.toFixed(pct < 1 ? 1 : 0)}%`;
+      : `${formatDistance(journey.route.distance_m)} 중 ${formatDistance(walkedM)} · ${pctText}`;
   $("journey-mode").textContent =
-    journey.route.mode === "road" ? `${wagwa(character.name)} 가는 길` : `${wagwa(character.name)} 가는 길 · 직선 경로`;
+    journey.route.mode === "road" ? `${wagwa(character.name)} 가는 길` : `${wagwa(character.name)} 가는 길 · 직선`;
   const sessionM = (WALK_KMH * 1000 * minutes) / 60;
   if (!running()) {
-    $("clock-sub").textContent = left > 0 ? `이번에 ${formatDistance(Math.min(sessionM, left))}` : "도착 완료";
+    $("clock-sub").textContent = left > 0 ? `이번 집중으로 ${formatDistance(Math.min(sessionM, left))}` : "도착 완료";
   }
 }
 
+function todayRecord() {
+  return store.get(`day:${new Date().toLocaleDateString("sv-SE")}`, { minutes: 0, meters: 0, sessions: 0 });
+}
+
 function renderToday() {
-  const today = store.get(`day:${new Date().toLocaleDateString("sv-SE")}`, null);
-  $("today").textContent = today ? `오늘 집중 ${today.minutes}분 · ${formatDistance(today.meters)} 걸었어요` : "";
+  const today = todayRecord();
+  $("stat-minutes").textContent = `${today.minutes}분`;
+  $("stat-meters").textContent = formatDistance(today.meters);
+  $("stat-sessions").textContent = `${today.sessions ?? Math.round(today.minutes / 25)}번`;
 }
 
 function renderCharacter() {
-  $("char-emoji").textContent = character.emoji;
-  $("brand-emoji").textContent = character.emoji;
+  $("hero-char").textContent = character.emoji;
   if (walkerShown) walkerEl.querySelector(".walker-body").textContent = character.emoji;
+}
+
+function setView(view, follow = true) {
+  // focus: 캐릭터와 타이머 중심(지도는 흐리게) / map: 지도 크게 보기
+  document.body.classList.toggle("view-focus", view === "focus");
+  document.body.classList.toggle("view-map", view === "map");
+  $("btn-view").textContent = view === "map" ? "⏱️" : "🗺️";
+  $("btn-view").setAttribute("aria-label", view === "map" ? "타이머로 돌아가기" : "지도 크게 보기");
+  requestAnimationFrame(() => {
+    updatePadding();
+    if (follow && journey) focusWalker();
+  });
 }
 
 // ---------- 목적지 정하기 ----------
@@ -330,7 +352,8 @@ async function setJourney(name, address, dest) {
     store.set("journey", journey);
     drawJourney();
     renderJourney();
-    overview();
+    setView("map", false);
+    setTimeout(overview, 450);
     const where = origin.fallback ? "서울시청에서 출발해요 (위치 권한이 없어요). " : "";
     const sessions = Math.ceil(route.distance_m / ((WALK_KMH * 1000 * minutes) / 60));
     $("status").textContent =
@@ -379,6 +402,7 @@ async function randomDestination() {
 let picking = false;
 function startPicking() {
   closeModal("dest-modal");
+  setView("map", false);
   picking = true;
   const banner = $("banner");
   banner.textContent = "지도를 눌러 목적지를 골라요";
@@ -405,9 +429,10 @@ function setMode(mode) {
   $("btn-pause").hidden = mode === "idle";
   $("btn-stop").hidden = mode === "idle";
   $("btn-pause").textContent = mode === "paused" ? "계속하기" : "일시정지";
-  for (const chip of document.querySelectorAll(".chip")) chip.disabled = mode !== "idle";
-  $("btn-dest-change").disabled = mode !== "idle";
+  $("minute-chips").hidden = mode !== "idle";
+  $("dest-chip").disabled = mode !== "idle";
   walkerEl.classList.toggle("walking", mode === "running");
+  document.querySelector(".avatar").classList.toggle("walking", mode === "running");
 }
 
 function start() {
@@ -417,13 +442,17 @@ function start() {
   const sessionM = (WALK_KMH * 1000 * minutes) / 60;
   session = {
     startM: journey.walked_m,
-    targetM: Math.min(journey.route.distance_m, journey.walked_m + sessionM),
+    // 목적지까지 100m도 안 남으면 그냥 도착으로 쳐요 (49m 남기고 끝나면 아쉬우니까)
+    targetM:
+      journey.route.distance_m - (journey.walked_m + sessionM) < 100
+        ? journey.route.distance_m
+        : journey.walked_m + sessionM,
     speed: sessionM / (minutes * MS_PER_MINUTE), // m/ms
     durationMs: minutes * MS_PER_MINUTE,
     remainingMs: minutes * MS_PER_MINUTE,
   };
-  $("status").textContent = `${character.emoji} ${iga(character.name)} 출발했어요! ${character.line}`;
-  focusWalker();
+  $("status").textContent = `${iga(character.name)} 출발했어요! ${character.line}`;
+  setView("focus");
   resume();
 }
 
@@ -496,7 +525,8 @@ function finish() {
   setMode("idle");
 
   const dayKey = `day:${new Date().toLocaleDateString("sv-SE")}`;
-  const today = store.get(dayKey, { minutes: 0, meters: 0 });
+  const today = store.get(dayKey, { minutes: 0, meters: 0, sessions: 0 });
+  today.sessions = (today.sessions ?? 0) + 1;
   today.minutes += minutes;
   today.meters += Math.round(walked);
   store.set(dayKey, today);
@@ -578,7 +608,7 @@ for (const modal of document.querySelectorAll(".modal")) {
   });
 }
 
-function renderCharacterGrid() {
+function renderSettings() {
   const grid = $("char-grid");
   grid.innerHTML = "";
   for (const c of CHARACTERS) {
@@ -591,43 +621,53 @@ function renderCharacterGrid() {
       character = c;
       store.set("character", c.id);
       renderCharacter();
-      renderCharacterGrid();
+      renderSettings();
       renderJourney();
+      $("status").textContent = `${c.emoji} ${c.line}`;
     });
     grid.appendChild(btn);
   }
-  const line = document.createElement("p");
-  line.className = "char-line";
-  line.textContent = `${character.emoji} ${character.name}: ${character.line}`;
-  grid.appendChild(line);
+
+  const styles = $("style-options");
+  styles.innerHTML = "";
+  MAP_STYLES.forEach((st, i) => {
+    const btn = document.createElement("button");
+    btn.className = `chip${i === styleIndex ? " active" : ""}`;
+    btn.textContent = st.name;
+    btn.addEventListener("click", () => {
+      if (i === styleIndex) return;
+      styleIndex = i;
+      store.set("mapStyle", st.id);
+      map.setStyle(st.url);
+      map.easeTo({ pitch: st.pitch, duration: 800 });
+      renderSettings();
+    });
+    styles.appendChild(btn);
+  });
+  renderToday();
 }
 
 // ---------- 버튼 연결 ----------
 $("btn-start").addEventListener("click", start);
 $("btn-pause").addEventListener("click", () => ($("btn-pause").textContent === "일시정지" ? pause() : resume()));
 $("btn-stop").addEventListener("click", stop);
-$("btn-dest-empty").addEventListener("click", () => openModal("dest-modal"));
-$("btn-dest-change").addEventListener("click", () => openModal("dest-modal"));
-$("btn-character").addEventListener("click", () => {
-  renderCharacterGrid();
-  openModal("char-modal");
+$("dest-chip").addEventListener("click", () => openModal("dest-modal"));
+$("btn-settings").addEventListener("click", () => {
+  renderSettings();
+  openModal("settings-modal");
 });
-$("btn-style").addEventListener("click", () => {
-  styleIndex = (styleIndex + 1) % MAP_STYLES.length;
-  const s = MAP_STYLES[styleIndex];
-  store.set("mapStyle", s.id);
-  map.setStyle(s.url);
-  map.easeTo({ pitch: s.pitch, duration: 800 });
-  $("status").textContent = `${s.name}로 바꿨어요`;
-});
+$("btn-view").addEventListener("click", () =>
+  setView(document.body.classList.contains("view-map") ? "focus" : "map"),
+);
+$("btn-back").addEventListener("click", () => setView("focus"));
 $("btn-overview").addEventListener("click", overview);
 $("search-form").addEventListener("submit", searchPlaces);
 $("btn-random").addEventListener("click", randomDestination);
 $("btn-pick").addEventListener("click", startPicking);
-for (const chip of document.querySelectorAll(".chip")) {
+for (const chip of document.querySelectorAll("#minute-chips .chip")) {
   chip.addEventListener("click", () => {
     minutes = Number(chip.dataset.min);
-    for (const c of document.querySelectorAll(".chip")) c.classList.toggle("active", c === chip);
+    for (const c of document.querySelectorAll("#minute-chips .chip")) c.classList.toggle("active", c === chip);
     resetClock();
   });
 }

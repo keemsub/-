@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#fff8ee">
+  <meta name="theme-color" content="#fff6ec">
   <title>걸음모도로</title>
   <!-- 휴대폰 홈 화면에 앱처럼 추가하기 위한 설정 -->
   <link rel="manifest" href="/static/manifest.webmanifest">
@@ -16,115 +16,128 @@
   <link rel="stylesheet" href="/static/vendor/maplibre/maplibre-gl.css">
   <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
+<body class="view-focus">
   <div id="map"></div>
+  <div class="veil" aria-hidden="true"></div>
 
-  <!-- 위쪽 떠 있는 버튼들 -->
   <header class="topbar">
-    <div class="brand"><span id="brand-emoji">🐢</span> 걸음모도로</div>
+    <p class="brand">걸음모도로</p>
     <div class="top-actions">
-      <button id="btn-character" class="round" aria-label="캐릭터 고르기"><span id="char-emoji">🐢</span></button>
-      <button id="btn-style" class="round" aria-label="지도 모양 바꾸기">🗺️</button>
-      <button id="btn-overview" class="round" aria-label="전체 경로 보기" hidden>🧭</button>
+      <button id="btn-view" class="icon-btn" aria-label="지도 크게 보기">🗺️</button>
+      <button id="btn-settings" class="icon-btn" aria-label="설정">⚙️</button>
     </div>
   </header>
 
   <div id="banner" class="banner" hidden></div>
 
-  <!-- 아래쪽 카드 -->
-  <section class="sheet">
-    <div id="journey-empty" class="journey">
-      <div>
-        <p class="eyebrow">오늘의 여정</p>
-        <p class="journey-title">어디까지 걸어가 볼까요?</p>
-      </div>
-      <button id="btn-dest-empty" class="pill primary">목적지 정하기</button>
+  <!-- 첫 화면: 캐릭터, 큰 타이머, 시작 버튼 -->
+  <main class="hero">
+    <button id="dest-chip" class="dest-chip">
+      <span class="dest-flag">🏁</span>
+      <span id="dest-name">목적지를 정해 주세요</span>
+      <span id="dest-pct" class="dest-pct"></span>
+    </button>
+
+    <div class="ring">
+      <svg viewBox="0 0 200 200" aria-hidden="true">
+        <circle class="ring-track" cx="100" cy="100" r="92"></circle>
+        <circle id="ring-fill" class="ring-fill" cx="100" cy="100" r="92"></circle>
+      </svg>
+      <div class="avatar"><span id="hero-char" class="hero-char">🐢</span></div>
     </div>
 
-    <div id="journey-set" class="journey" hidden>
-      <div class="journey-info">
-        <p class="eyebrow"><span id="journey-mode"></span></p>
-        <p class="journey-title"><span>🏁</span> <span id="journey-name"></span></p>
-        <div class="progress"><div id="journey-bar" class="progress-bar"></div></div>
-        <p id="journey-text" class="muted small"></p>
-      </div>
-      <button id="btn-dest-change" class="pill">바꾸기</button>
+    <div id="clock" class="clock">25:00</div>
+    <p id="clock-sub" class="clock-sub">집중 준비</p>
+
+    <div id="minute-chips" class="segmented" role="radiogroup" aria-label="집중 시간">
+      <button class="chip active" data-min="25">25분</button>
+      <button class="chip" data-min="50">50분</button>
+      <button class="chip" data-min="60">60분</button>
     </div>
 
-    <div class="timer-row">
-      <div class="ring">
-        <svg viewBox="0 0 120 120" aria-hidden="true">
-          <circle class="ring-track" cx="60" cy="60" r="52"></circle>
-          <circle id="ring-fill" class="ring-fill" cx="60" cy="60" r="52"></circle>
-        </svg>
-        <div class="ring-text">
-          <div id="clock" class="clock">25:00</div>
-          <div id="clock-sub" class="muted small">집중 준비</div>
-        </div>
-      </div>
-      <div class="timer-controls">
-        <div id="minute-chips" class="chips" role="radiogroup" aria-label="집중 시간">
-          <button class="chip active" data-min="25">25분</button>
-          <button class="chip" data-min="50">50분</button>
-          <button class="chip" data-min="60">60분</button>
-        </div>
-        <button id="btn-start" class="big primary">집중 시작</button>
-        <div class="row">
-          <button id="btn-pause" class="pill" hidden>일시정지</button>
-          <button id="btn-stop" class="pill ghost" hidden>그만두기</button>
-        </div>
-      </div>
+    <div class="actions">
+      <button id="btn-start" class="cta">집중 시작</button>
+      <button id="btn-pause" class="cta soft" hidden>일시정지</button>
+      <button id="btn-stop" class="text-btn" hidden>그만두기</button>
     </div>
 
     <p id="status" class="status"></p>
-    <p id="today" class="today"></p>
+  </main>
+
+  <!-- 지도 크게 보기 -->
+  <section class="map-card">
+    <div class="map-card-head">
+      <div class="journey-info">
+        <p id="journey-mode" class="eyebrow"></p>
+        <p class="journey-title">🏁 <span id="journey-name">목적지 없음</span></p>
+      </div>
+      <button id="btn-back" class="pill">돌아가기</button>
+    </div>
+    <div class="progress"><div id="journey-bar" class="progress-bar"></div></div>
+    <div class="map-card-foot">
+      <p id="journey-text" class="muted small"></p>
+      <button id="btn-overview" class="text-btn small">전체 경로</button>
+    </div>
   </section>
+
+  <!-- 설정 -->
+  <div id="settings-modal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="handle"></div>
+      <div class="modal-head">
+        <p class="modal-title">설정</p>
+        <button class="close" data-close="settings-modal" aria-label="닫기">✕</button>
+      </div>
+
+      <p class="section-title">함께 걸을 친구</p>
+      <div id="char-grid" class="char-grid"></div>
+
+      <p class="section-title">지도 모양</p>
+      <div id="style-options" class="segmented wide"></div>
+
+      <p class="section-title">오늘의 기록</p>
+      <div class="stats">
+        <div><p id="stat-minutes" class="stat-num">0분</p><p class="muted small">집중</p></div>
+        <div><p id="stat-meters" class="stat-num">0m</p><p class="muted small">걸음</p></div>
+        <div><p id="stat-sessions" class="stat-num">0번</p><p class="muted small">완료</p></div>
+      </div>
+    </div>
+  </div>
 
   <!-- 목적지 고르기 -->
   <div id="dest-modal" class="modal" hidden>
     <div class="modal-card">
+      <div class="handle"></div>
       <div class="modal-head">
         <p class="modal-title">어디로 걸어갈까요?</p>
         <button class="close" data-close="dest-modal" aria-label="닫기">✕</button>
       </div>
       <form id="search-form" class="search">
-        <input id="search-input" type="search" placeholder="예: 제주도, 남산서울타워, 한강공원" autocomplete="off" enterkeyhint="search">
+        <input id="search-input" type="search" placeholder="제주도, 남산서울타워, 한강공원..." autocomplete="off" enterkeyhint="search">
         <button class="pill primary" type="submit">검색</button>
       </form>
       <ul id="search-results" class="results"></ul>
-      <div class="divider"><span>또는</span></div>
       <div class="options">
         <button id="btn-random" class="option">
           <span class="option-emoji">🎲</span>
-          <span><b>근처 추천 여행지</b><br><span class="muted small">집중 시간 안에 갈 수 있는 공원·카페 중 하나</span></span>
+          <span><b>근처 추천</b><br><span class="muted small">집중 시간 안에 닿는 공원·카페</span></span>
         </button>
         <button id="btn-pick" class="option">
           <span class="option-emoji">📍</span>
-          <span><b>지도에서 직접 찍기</b><br><span class="muted small">지도를 눌러서 목적지를 골라요</span></span>
+          <span><b>지도에서 찍기</b><br><span class="muted small">원하는 곳을 직접 골라요</span></span>
         </button>
       </div>
-    </div>
-  </div>
-
-  <!-- 캐릭터 고르기 -->
-  <div id="char-modal" class="modal" hidden>
-    <div class="modal-card">
-      <div class="modal-head">
-        <p class="modal-title">누구랑 걸을까요?</p>
-        <button class="close" data-close="char-modal" aria-label="닫기">✕</button>
-      </div>
-      <div id="char-grid" class="char-grid"></div>
     </div>
   </div>
 
   <!-- 집중 끝 -->
-  <div id="done-modal" class="modal" hidden>
+  <div id="done-modal" class="modal center" hidden>
     <div class="modal-card done">
       <div id="done-emoji" class="done-emoji">🏁</div>
       <p id="done-title" class="modal-title"></p>
       <p id="done-text" class="muted"></p>
-      <a id="done-link" class="big primary" target="_blank" rel="noopener" hidden>카카오맵으로 진짜 걸어가기</a>
-      <button class="big" data-close="done-modal">좋아요</button>
+      <a id="done-link" class="cta" target="_blank" rel="noopener" hidden>카카오맵으로 진짜 걸어가기</a>
+      <button class="cta soft" data-close="done-modal">좋아요</button>
     </div>
   </div>
 
