@@ -73,7 +73,7 @@ uv run uvicorn app.main:app --reload
 | 지도 그림 | [OpenFreeMap](https://openfreemap.org) | 키·요금 없음, 출처 표시 필요(지도 오른쪽 위 ⓘ) |
 | 장소 검색 | [Nominatim](https://nominatim.org) | 초당 1회 이하로만 써야 해서 서버가 간격을 지켜요. 사용자가 많아지면 카카오 로컬 API 등으로 교체 |
 | 근처 장소 | Overpass (OpenStreetMap) | 키 없음 |
-| 실제 걷는 길 | [OpenRouteService](https://openrouteservice.org) | `ORS_API_KEY`가 있을 때만. 없으면 직선 경로 |
+| 실제 걷는 길 | [FOSSGIS OSRM 도보 길찾기](https://routing.openstreetmap.de) | 키 없이 무료. `ORS_API_KEY`가 있으면 [OpenRouteService](https://openrouteservice.org)를 써요. 바다 건너처럼 걸어서 못 가는 곳만 직선 |
 
 ## 검사하기
 
@@ -95,7 +95,7 @@ app/
   auth.py        # 카카오·구글 로그인, 회원별 기록 저장 API
   avatar.py      # 아바타 꾸미기 아이템 목록과 발자국 코인 규칙
   db.py          # 데이터베이스 (내 컴퓨터는 SQLite, 배포는 Postgres)
-  journey.py     # 목적지 검색(Nominatim)과 가는 길 계산(ORS 키가 있으면 실제 길, 없으면 직선)
+  journey.py     # 목적지 검색(Nominatim)과 가는 길 계산(키 없이 실제 도보 길, 못 가는 곳은 직선)
   config.py      # .env 설정 읽기
   templates/     # HTML 화면
   static/        # 지도·타이머 JS, CSS, 지도 라이브러리(MapLibre), 앱 아이콘

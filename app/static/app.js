@@ -67,7 +67,9 @@ const store = {
 let character = CHARACTERS.find((c) => c.id === store.get("character", "turtle")) || CHARACTERS[0];
 let styleIndex = Math.max(0, MAP_STYLES.findIndex((s) => s.id === store.get("mapStyle", "liberty")));
 let journey = store.get("journey", null);
-let minutes = 25;
+const PRESET_MINUTES = [25, 50];
+const clampMinutes = (m) => Math.min(180, Math.max(1, Math.round(Number(m) || 25)));
+let minutes = clampMinutes(store.get("minutes", 25));
 // ---------- 나만의 아바타 (아이템 목록은 서버의 app/avatar.py) ----------
 const CATALOG = JSON.parse($("avatar-catalog").textContent);
 const ITEMS = Object.fromEntries(CATALOG.items.map((i) => [i.id, i]));
@@ -137,7 +139,10 @@ const formatDistance = (m) =>
 
 function formatClock(ms) {
   const total = Math.max(0, Math.ceil(ms / 1000));
-  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+  const pad = (n) => String(n).padStart(2, "0");
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  return h ? `${h}:${pad(m)}:${pad(total % 60)}` : `${pad(m)}:${pad(total % 60)}`;
 }
 
 function getPosition() {
@@ -524,7 +529,7 @@ async function randomDestination() {
   $("status").textContent = "근처 여행지를 고르는 중...";
   const pos = await getPosition();
   try {
-    const trip = await api(`/api/trip?lat=${pos.lat}&lon=${pos.lon}&minutes=${minutes}`);
+    const trip = await api(`/api/trip?lat=${pos.lat}&lon=${pos.lon}&minutes=${Math.min(60, Math.max(5, minutes))}`);
     const d = trip.destination;
     await setJourney(d.name, d.kind, d);
   } catch {
@@ -809,13 +814,67 @@ $("btn-overview").addEventListener("click", overview);
 $("search-form").addEventListener("submit", searchPlaces);
 $("btn-random").addEventListener("click", randomDestination);
 $("btn-pick").addEventListener("click", startPicking);
-for (const chip of document.querySelectorAll("#minute-chips .chip")) {
+// ---------- 집중 시간 ----------
+function setMinutes(m) {
+  minutes = clampMinutes(m);
+  store.set("minutes", minutes);
+  renderMinuteChips();
+  resetClock();
+}
+
+function renderMinuteChips() {
+  const custom = !PRESET_MINUTES.includes(minutes);
+  for (const c of document.querySelectorAll("#minute-chips .chip[data-min]")) {
+    c.classList.toggle("active", Number(c.dataset.min) === minutes);
+  }
+  $("chip-custom").classList.toggle("active", custom);
+  $("chip-custom").textContent = custom ? `${minutes}분 ✎` : "직접 ✎";
+}
+
+const formatMinutes = (m) => (m >= 60 ? `${Math.floor(m / 60)}시간${m % 60 ? ` ${m % 60}분` : ""}` : `${m}분`);
+
+let draftMinutes = minutes;
+function renderTimePicker() {
+  $("time-value").textContent = draftMinutes;
+  $("time-range").value = draftMinutes;
+  const meters = (WALK_KMH * 1000 * draftMinutes) / 60;
+  $("time-hint").textContent = `${formatMinutes(draftMinutes)} 동안 약 ${formatDistance(meters)} 걸어요`;
+  for (const c of document.querySelectorAll("#time-presets .chip")) {
+    c.classList.toggle("active", Number(c.dataset.min) === draftMinutes);
+  }
+}
+
+for (const chip of document.querySelectorAll("#minute-chips .chip[data-min]")) {
+  chip.addEventListener("click", () => setMinutes(chip.dataset.min));
+}
+$("chip-custom").addEventListener("click", () => {
+  draftMinutes = minutes;
+  renderTimePicker();
+  openModal("time-modal");
+});
+$("time-range").addEventListener("input", (e) => {
+  draftMinutes = clampMinutes(e.target.value);
+  renderTimePicker();
+});
+$("time-minus").addEventListener("click", () => {
+  draftMinutes = clampMinutes(draftMinutes - 1);
+  renderTimePicker();
+});
+$("time-plus").addEventListener("click", () => {
+  draftMinutes = clampMinutes(draftMinutes + 1);
+  renderTimePicker();
+});
+for (const chip of document.querySelectorAll("#time-presets .chip")) {
   chip.addEventListener("click", () => {
-    minutes = Number(chip.dataset.min);
-    for (const c of document.querySelectorAll("#minute-chips .chip")) c.classList.toggle("active", c === chip);
-    resetClock();
+    draftMinutes = clampMinutes(chip.dataset.min);
+    renderTimePicker();
   });
 }
+$("time-ok").addEventListener("click", () => {
+  setMinutes(draftMinutes);
+  closeModal("time-modal");
+  $("status").textContent = `${formatMinutes(minutes)} 집중으로 정했어요`;
+});
 
 // ---------- 로그인과 서버 저장 ----------
 const PROVIDERS = {
@@ -829,6 +888,7 @@ function collectState() {
   return {
     character: character.id,
     mapStyle: MAP_STYLES[styleIndex].id,
+    minutes,
     journey,
     days,
     avatar: { coins, owned, outfit },
@@ -839,6 +899,7 @@ function applyState(state) {
   const quiet = { sync: false };
   if (state.character) store.set("character", state.character, quiet);
   if (state.mapStyle) store.set("mapStyle", state.mapStyle, quiet);
+  if (state.minutes) store.set("minutes", state.minutes, quiet);
   store.set("journey", state.journey ?? null, quiet);
   for (const [day, record] of Object.entries(state.days || {})) store.set(`day:${day}`, record, quiet);
   if (state.avatar) {
@@ -942,6 +1003,7 @@ initAccount().then(() => {
 });
 
 renderCharacter();
+renderMinuteChips();
 updatePadding();
 resetClock();
 renderToday();

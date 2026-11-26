@@ -1,8 +1,9 @@
 """목적지 검색과 '가는 길' 계산.
 
 - 장소 검색: OpenStreetMap Nominatim (무료, 초당 1회 이하로만 써야 해서 서버에서 간격을 지켜요)
-- 가는 길: OpenRouteService 도보 길찾기(키가 있을 때). 키가 없거나 바다 건너처럼
-  걸어서 갈 수 없는 곳이면 직선(지구 곡면 기준)으로 대신합니다.
+- 가는 길: 키 없이 쓰는 OpenStreetMap 도보 길찾기(FOSSGIS OSRM)가 기본이에요.
+  ORS 키가 있으면 OpenRouteService를 써요. 바다 건너처럼 걸어서 갈 수 없거나
+  길찾기 서버가 응답하지 않으면 직선(지구 곡면 기준)으로 대신합니다.
 """
 
 import math
@@ -16,6 +17,8 @@ import httpx
 from app.places import haversine_m
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+# 경로 안의 driving은 이름일 뿐이고, routed-foot 서버는 항상 도보 길로 답해요.
+OSM_FOOT_URL = "https://routing.openstreetmap.de/routed-foot/route/v1/driving"
 ORS_DIRECTIONS_URL = "https://api.openrouteservice.org/v2/directions/foot-walking/geojson"
 USER_AGENT = "walkmodoro/0.1 (+https://github.com/keemsub/walkmodoro)"
 
@@ -88,6 +91,44 @@ class StraightRouter:
         steps = max(2, min(400, int(distance / 50)))
         coords = [_interpolate(start, end, i / steps) for i in range(steps + 1)]
         return Route([[lon, lat] for lat, lon in coords], round(distance), "straight")
+
+
+class OsmFootRouter:
+    """키 없이 쓰는 OpenStreetMap 도보 길찾기 (openstreetmap.org 길찾기와 같은 서버).
+
+    무료 공용 서버라 같은 길은 저장해 두고 다시 묻지 않아요.
+    """
+
+    def __init__(self, client: httpx.Client | None = None) -> None:
+        self.client = client or httpx.Client(timeout=20, headers={"User-Agent": USER_AGENT})
+        self.fallback = StraightRouter()
+        self._cache: dict[tuple[float, ...], Route] = {}
+
+    def route(self, start: tuple[float, float], end: tuple[float, float]) -> Route:
+        key = tuple(round(v, 4) for v in (*start, *end))  # 약 10m 단위로 같은 길로 봐요
+        if key in self._cache:
+            return self._cache[key]
+        try:
+            response = self.client.get(
+                f"{OSM_FOOT_URL}/{start[1]},{start[0]};{end[1]},{end[0]}",
+                params={"overview": "full", "geometries": "geojson"},
+            )
+            response.raise_for_status()
+            data = response.json()
+            if data.get("code") != "Ok":
+                raise ValueError(data.get("code"))
+            best = data["routes"][0]
+            coords = [pt[:2] for pt in best["geometry"]["coordinates"]]
+            if len(coords) < 2:
+                raise ValueError("empty route")
+            result = Route(coords, round(best["distance"]), "road")
+        except (httpx.HTTPError, KeyError, IndexError, ValueError):
+            # 걸어서 갈 길이 없거나(바다 건너 등) 서버가 바쁘면 직선으로 대신해요.
+            return self.fallback.route(start, end)
+        if len(self._cache) > 300:
+            self._cache.clear()
+        self._cache[key] = result
+        return result
 
 
 class OrsRouter:

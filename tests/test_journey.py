@@ -2,7 +2,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app.journey import NominatimGeocoder, OrsRouter, SearchResult, StraightRouter
+from app.journey import NominatimGeocoder, OrsRouter, OsmFootRouter, SearchResult, StraightRouter
 from app.main import app, get_geocoder, get_router
 from app.places import haversine_m
 
@@ -60,6 +60,54 @@ def test_ors_router_falls_back_to_straight_when_no_walking_path():
         client=httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(404))),
     )
     assert router.route(SEOUL, JEJU).mode == "straight"
+
+
+def test_osm_foot_router_follows_walking_path_and_caches():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        assert "routed-foot" in request.url.path
+        assert request.url.path.endswith("/126.978,37.5665;126.98,37.57")
+        assert request.url.params["geometries"] == "geojson"
+        return httpx.Response(
+            200,
+            json={
+                "code": "Ok",
+                "routes": [
+                    {
+                        "distance": 731.6,
+                        "geometry": {
+                            "type": "LineString",
+                            "coordinates": [[126.978, 37.5665], [126.979, 37.568], [126.98, 37.57]],
+                        },
+                    }
+                ],
+            },
+        )
+
+    router = OsmFootRouter(client=httpx.Client(transport=httpx.MockTransport(handler)))
+    route = router.route(SEOUL, (37.57, 126.98))
+    assert route.mode == "road"
+    assert route.distance_m == 732
+    assert len(route.coordinates) == 3
+    router.route(SEOUL, (37.57, 126.98))
+    assert len(calls) == 1
+
+
+def test_osm_foot_router_falls_back_when_no_route_or_server_down():
+    no_route = OsmFootRouter(
+        client=httpx.Client(
+            transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"code": "NoRoute"}))
+        )
+    )
+    assert no_route.route(SEOUL, JEJU).mode == "straight"
+
+    def boom(request):
+        raise httpx.ConnectTimeout("slow")
+
+    down = OsmFootRouter(client=httpx.Client(transport=httpx.MockTransport(boom)))
+    assert down.route(SEOUL, JEJU).mode == "straight"
 
 
 def test_nominatim_parses_and_caches_with_user_agent():

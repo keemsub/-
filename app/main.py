@@ -15,7 +15,7 @@ from app.auth import router as auth_router
 from app.avatar import catalog
 from app.config import get_settings
 from app.isochrone import CachedProvider, DemoProvider, IsochroneProvider, OrsProvider
-from app.journey import Geocoder, NominatimGeocoder, OrsRouter, Router, StraightRouter
+from app.journey import Geocoder, NominatimGeocoder, OrsRouter, OsmFootRouter, Router
 from app.places import OverpassProvider, PlaceProvider, outer_ring, pick_destination
 
 BASE_DIR = Path(__file__).parent
@@ -56,7 +56,7 @@ def get_geocoder() -> Geocoder:
 @lru_cache
 def get_router() -> Router:
     settings = get_settings()
-    return OrsRouter(settings.ors_api_key) if settings.ors_api_key else StraightRouter()
+    return OrsRouter(settings.ors_api_key) if settings.ors_api_key else OsmFootRouter()
 
 
 @app.get("/", response_class=HTMLResponse)
