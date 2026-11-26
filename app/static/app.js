@@ -68,6 +68,27 @@ let character = CHARACTERS.find((c) => c.id === store.get("character", "turtle")
 let styleIndex = Math.max(0, MAP_STYLES.findIndex((s) => s.id === store.get("mapStyle", "liberty")));
 let journey = store.get("journey", null);
 let minutes = 25;
+// ---------- 나만의 아바타 (아이템 목록은 서버의 app/avatar.py) ----------
+const CATALOG = JSON.parse($("avatar-catalog").textContent);
+const ITEMS = Object.fromEntries(CATALOG.items.map((i) => [i.id, i]));
+const SLOTS = [
+  { id: "hat", name: "모자" },
+  { id: "neck", name: "목" },
+  { id: "bag", name: "가방" },
+  { id: "color", name: "색깔" },
+];
+const DEFAULT_OUTFIT = { hat: null, neck: null, bag: null, color: "color-mint" };
+let outfit = { ...DEFAULT_OUTFIT, ...store.get("outfit", {}) };
+let owned = store.get("owned", []);
+let coins = store.get("coins", null);
+if (coins === null) {
+  // 처음 만난 날: 지금까지 걸은 거리만큼 코인을 선물해요.
+  const meters = store.keys("day:").reduce((sum, k) => sum + (store.get(k, {}).meters || 0), 0);
+  coins = Math.floor(meters / CATALOG.meters_per_coin);
+  store.set("coins", coins, { sync: false });
+}
+let closetSlot = "hat";
+
 let me = null; // 로그인 정보 (/api/me)
 let syncTimer = null;
 
@@ -247,7 +268,7 @@ function setWalker(lngLat, nextLngLat) {
     walkerShown = true;
   }
   const body = walkerEl.querySelector(".walker-body");
-  body.textContent = character.emoji;
+  if (!body.firstChild) paintFigure(body);
   // 동물 이모지는 대부분 왼쪽을 보고 있어서, 오른쪽(동쪽)으로 갈 땐 뒤집어요.
   if (nextLngLat) body.classList.toggle("flip", nextLngLat[0] > lngLat[0]);
 }
@@ -334,9 +355,108 @@ function renderToday() {
   $("stat-sessions").textContent = `${today.sessions ?? Math.round(today.minutes / 25)}번`;
 }
 
+const hasItem = (item) => (item.price === 0 && !item.premium) || owned.includes(item.id);
+
+// 캐릭터 위에 모자·목·가방을 겹쳐 그려요. 크기는 글자 크기(em)를 따라가요.
+function paintFigure(el) {
+  el.innerHTML = '<span class="fig-body"></span>';
+  el.querySelector(".fig-body").textContent = character.emoji;
+  for (const slot of ["hat", "neck", "bag"]) {
+    const item = ITEMS[outfit[slot]];
+    if (!item) continue;
+    const layer = document.createElement("span");
+    layer.className = `fig-${slot}`;
+    layer.textContent = item.icon;
+    el.appendChild(layer);
+  }
+}
+
 function renderCharacter() {
-  $("hero-char").textContent = character.emoji;
-  if (walkerShown) walkerEl.querySelector(".walker-body").textContent = character.emoji;
+  const color = ITEMS[outfit.color]?.icon || "#e2f5ea";
+  for (const id of ["hero-avatar", "closet-preview"]) {
+    const box = $(id);
+    box.style.setProperty("--av-color", color);
+    box.innerHTML = '<span class="figure hero-char"></span>';
+    paintFigure(box.firstChild);
+  }
+  if (walkerShown) paintFigure(walkerEl.querySelector(".walker-body"));
+  $("coin-count").textContent = coins.toLocaleString();
+}
+
+function renderCloset() {
+  $("closet-coins").textContent = coins.toLocaleString();
+  const tabs = $("slot-tabs");
+  tabs.innerHTML = "";
+  for (const slot of SLOTS) {
+    const btn = document.createElement("button");
+    btn.className = `chip${slot.id === closetSlot ? " active" : ""}`;
+    btn.textContent = slot.name;
+    btn.addEventListener("click", () => {
+      closetSlot = slot.id;
+      renderCloset();
+    });
+    tabs.appendChild(btn);
+  }
+
+  const grid = $("item-grid");
+  grid.innerHTML = "";
+  const items = CATALOG.items.filter((i) => i.slot === closetSlot);
+  if (closetSlot !== "color") items.unshift({ id: null, slot: closetSlot, name: "없음", icon: "🚫", price: 0 });
+  for (const item of items) {
+    const btn = document.createElement("button");
+    btn.dataset.id = item.id ?? "";
+    const worn = outfit[item.slot] === item.id;
+    const mine = item.id === null || hasItem(item);
+    btn.className = `item${worn ? " active" : ""}${mine ? "" : " locked"}${item.premium ? " premium" : ""}`;
+    btn.innerHTML = '<span class="item-icon"></span><span class="name"></span><span class="tag"></span>';
+    const icon = btn.querySelector(".item-icon");
+    if (item.slot === "color") {
+      icon.classList.add("swatch");
+      icon.style.background = item.icon;
+    } else {
+      icon.textContent = item.icon;
+    }
+    btn.querySelector(".name").textContent = item.name;
+    btn.querySelector(".tag").textContent = worn
+      ? "착용 중"
+      : mine
+        ? "입기"
+        : item.premium
+          ? "곧 만나요"
+          : `🐾 ${item.price}`;
+    btn.addEventListener("click", () => chooseItem(item, mine));
+    grid.appendChild(btn);
+  }
+}
+
+function chooseItem(item, mine) {
+  if (!mine) {
+    if (item.premium) {
+      $("status").textContent = `${item.icon} ${item.name}${josa(item.name, "은", "는")} 특별 아이템이라 곧 만나요!`;
+      return flash(item.id, "곧 만나요");
+    }
+    if (coins < item.price) {
+      return flash(item.id, `🐾 ${item.price - coins}개 더`);
+    }
+    coins -= item.price;
+    owned = [...owned, item.id];
+    store.set("coins", coins);
+    store.set("owned", owned);
+    confetti([item.icon.startsWith("#") ? "🐾" : item.icon, "✨"]);
+  }
+  outfit = { ...outfit, [item.slot]: item.id };
+  store.set("outfit", outfit);
+  renderCharacter();
+  renderCloset();
+}
+
+// 살 수 없는 아이템을 누르면 잠깐 흔들고 이유를 보여줘요.
+function flash(id, text) {
+  renderCloset();
+  const target = $("item-grid").querySelector(`[data-id="${id}"]`);
+  if (!target) return;
+  target.querySelector(".tag").textContent = text;
+  target.classList.add("shake");
 }
 
 function setView(view, follow = true) {
@@ -545,6 +665,12 @@ function finish() {
   store.set(dayKey, today);
 
   const arrived = journey.walked_m >= journey.route.distance_m - 1;
+  const earned = Math.floor(walked / CATALOG.meters_per_coin) + (arrived ? CATALOG.arrival_bonus : 0);
+  coins += earned;
+  store.set("coins", coins);
+  renderCharacter();
+  $("done-coins").hidden = earned <= 0;
+  $("done-coins").textContent = `🐾 발자국 코인 +${earned}`;
   const left = journey.route.distance_m - journey.walked_m;
   const end = path.coords[path.coords.length - 1];
   $("done-emoji").textContent = arrived ? "🏁" : character.emoji;
@@ -657,6 +783,7 @@ function renderSettings() {
     });
     styles.appendChild(btn);
   });
+  renderCloset();
   renderToday();
 }
 
@@ -668,6 +795,11 @@ $("dest-chip").addEventListener("click", () => openModal("dest-modal"));
 $("btn-settings").addEventListener("click", () => {
   renderSettings();
   openModal("settings-modal");
+});
+$("btn-coins").addEventListener("click", () => {
+  renderSettings();
+  openModal("settings-modal");
+  requestAnimationFrame(() => $("closet").scrollIntoView({ behavior: "smooth", block: "start" }));
 });
 $("btn-view").addEventListener("click", () =>
   setView(document.body.classList.contains("view-map") ? "focus" : "map"),
@@ -699,6 +831,7 @@ function collectState() {
     mapStyle: MAP_STYLES[styleIndex].id,
     journey,
     days,
+    avatar: { coins, owned, outfit },
   };
 }
 
@@ -708,6 +841,11 @@ function applyState(state) {
   if (state.mapStyle) store.set("mapStyle", state.mapStyle, quiet);
   store.set("journey", state.journey ?? null, quiet);
   for (const [day, record] of Object.entries(state.days || {})) store.set(`day:${day}`, record, quiet);
+  if (state.avatar) {
+    store.set("coins", state.avatar.coins ?? 0, quiet);
+    store.set("owned", state.avatar.owned ?? [], quiet);
+    store.set("outfit", state.avatar.outfit ?? DEFAULT_OUTFIT, quiet);
+  }
 }
 
 function scheduleSync() {

@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.auth import router as auth_router
+from app.avatar import catalog
 from app.config import get_settings
 from app.isochrone import CachedProvider, DemoProvider, IsochroneProvider, OrsProvider
 from app.journey import Geocoder, NominatimGeocoder, OrsRouter, Router, StraightRouter
@@ -60,7 +61,7 @@ def get_router() -> Router:
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
-    return templates.TemplateResponse(request, "index.html")
+    return templates.TemplateResponse(request, "index.html", {"avatar": catalog()})
 
 
 @app.get("/health")
@@ -137,6 +138,12 @@ def route(
 ):
     """출발지에서 목적지까지 가는 길. 먼 곳이어도 길 전체를 주고, 얼마나 갈지는 화면이 정해요."""
     return router.route((from_lat, from_lon), (to_lat, to_lon)).to_dict()
+
+
+@app.get("/api/avatar/items")
+def avatar_items():
+    """아바타 꾸미기 아이템 목록과 발자국 코인 규칙."""
+    return catalog()
 
 
 @app.get("/api/config")

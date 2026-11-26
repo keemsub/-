@@ -23,6 +23,7 @@
   <header class="topbar">
     <p class="brand">걸음모도로</p>
     <div class="top-actions">
+      <button id="btn-coins" class="coin-pill" aria-label="발자국 코인, 아바타 꾸미기">🐾 <span id="coin-count">0</span></button>
       <button id="btn-view" class="icon-btn" aria-label="지도 크게 보기">🗺️</button>
       <button id="btn-settings" class="icon-btn" aria-label="설정">⚙️</button>
     </div>
@@ -43,7 +44,7 @@
         <circle class="ring-track" cx="100" cy="100" r="92"></circle>
         <circle id="ring-fill" class="ring-fill" cx="100" cy="100" r="92"></circle>
       </svg>
-      <div class="avatar"><span id="hero-char" class="hero-char">🐢</span></div>
+      <div id="hero-avatar" class="avatar"></div>
     </div>
 
     <div id="clock" class="clock">25:00</div>
@@ -94,6 +95,19 @@
       <p class="section-title">함께 걸을 친구</p>
       <div id="char-grid" class="char-grid"></div>
 
+      <div id="closet" class="closet">
+        <div class="closet-head">
+          <div id="closet-preview" class="avatar small"></div>
+          <div>
+            <p class="section-title flush">나만의 아바타</p>
+            <p class="muted small">100m 걸을 때마다 🐾 1개, 도착하면 🐾 10개 더</p>
+            <p class="coin-line">🐾 <b id="closet-coins">0</b>개 있어요</p>
+          </div>
+        </div>
+        <div id="slot-tabs" class="segmented wide" role="tablist"></div>
+        <div id="item-grid" class="item-grid"></div>
+      </div>
+
       <p class="section-title">지도 모양</p>
       <div id="style-options" class="segmented wide"></div>
 
@@ -138,6 +152,7 @@
       <div id="done-emoji" class="done-emoji">🏁</div>
       <p id="done-title" class="modal-title"></p>
       <p id="done-text" class="muted"></p>
+      <p id="done-coins" class="done-coins" hidden></p>
       <a id="done-link" class="cta" target="_blank" rel="noopener" hidden>카카오맵으로 진짜 걸어가기</a>
       <button class="cta soft" data-close="done-modal">좋아요</button>
     </div>
@@ -145,6 +160,7 @@
 
   <canvas id="confetti" aria-hidden="true"></canvas>
 
+  <script id="avatar-catalog" type="application/json">{{ avatar | tojson }}</script>
   <script src="/static/vendor/maplibre/maplibre-gl.js"></script>
   <script src="/static/app.js"></script>
 </body>
