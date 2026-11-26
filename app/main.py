@@ -12,6 +12,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import get_settings
 from app.isochrone import CachedProvider, DemoProvider, IsochroneProvider, OrsProvider
+from app.journey import Geocoder, NominatimGeocoder, OrsRouter, Router, StraightRouter
 from app.places import OverpassProvider, PlaceProvider, outer_ring, pick_destination
 
 BASE_DIR = Path(__file__).parent
@@ -32,6 +33,17 @@ def get_provider() -> IsochroneProvider:
 @lru_cache
 def get_place_provider() -> PlaceProvider:
     return OverpassProvider()
+
+
+@lru_cache
+def get_geocoder() -> Geocoder:
+    return NominatimGeocoder()
+
+
+@lru_cache
+def get_router() -> Router:
+    settings = get_settings()
+    return OrsRouter(settings.ors_api_key) if settings.ors_api_key else StraightRouter()
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -88,3 +100,34 @@ def _isochrone(provider: IsochroneProvider, lat: float, lon: float, minutes: int
         return provider.get_isochrone(lat, lon, minutes)
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail="지도 API 호출에 실패했어요.") from exc
+
+
+@app.get("/api/search")
+def search(
+    q: Annotated[str, Query(min_length=1, max_length=100, description="찾을 장소 이름")],
+    geocoder: Annotated[Geocoder, Depends(get_geocoder)],
+):
+    """목적지 검색. 예: 제주도, 남산타워, 집 근처 공원 이름"""
+    try:
+        results = geocoder.search(q)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="장소 검색에 실패했어요.") from exc
+    return {"results": [r.to_dict() for r in results]}
+
+
+@app.get("/api/route")
+def route(
+    from_lat: Annotated[float, Query(ge=-90, le=90)],
+    from_lon: Annotated[float, Query(ge=-180, le=180)],
+    to_lat: Annotated[float, Query(ge=-90, le=90)],
+    to_lon: Annotated[float, Query(ge=-180, le=180)],
+    router: Annotated[Router, Depends(get_router)],
+):
+    """출발지에서 목적지까지 가는 길. 먼 곳이어도 길 전체를 주고, 얼마나 갈지는 화면이 정해요."""
+    return router.route((from_lat, from_lon), (to_lat, to_lon)).to_dict()
+
+
+@app.get("/api/config")
+def config():
+    """화면이 알아야 하는 설정값."""
+    return {"walking_speed_kmh": get_settings().walking_speed_kmh}
