@@ -100,7 +100,10 @@ button { cursor: pointer; border: none; background: none; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* 화면이 짧으면 위가 잘려 위 버튼 뒤로 숨지 않게: 넘치면 아래로 스크롤돼요 */
+  justify-content: flex-start;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   gap: 14px;
   transition: opacity 0.4s ease, transform 0.4s ease;
 }
@@ -125,7 +128,7 @@ button { cursor: pointer; border: none; background: none; }
 .dest-pct:empty { display: none; }
 .dest-chip:disabled { opacity: 0.7; }
 
-.ring { position: relative; width: min(64vw, 260px); aspect-ratio: 1; margin-top: 8px; }
+.ring { position: relative; flex: none; width: min(64vw, 260px, 34svh); aspect-ratio: 1; margin-top: 8px; }
 .ring > svg { width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
 .ring-track { fill: none; stroke: rgb(255 255 255 / 75%); stroke-width: 10; }
 .ring-fill {
@@ -558,15 +561,15 @@ button { cursor: pointer; border: none; background: none; }
 .sound-btn {
   display: grid;
   justify-items: center;
-  width: 48px;
-  padding: 6px 0 4px;
-  border-radius: 16px;
-  background: var(--card);
+  width: 54px;
+  padding: 7px 0 5px;
+  border-radius: 18px;
+  background: white;
   box-shadow: var(--shadow);
   line-height: 1.1;
   font-size: 20px;
 }
-.sound-btn small { font-size: 0.62rem; font-weight: 700; color: var(--muted); }
+.sound-btn small { font-size: 0.68rem; font-weight: 800; color: var(--ink); }
 .sound-btn.on { background: var(--mint-soft); box-shadow: inset 0 0 0 2px var(--mint); }
 .sound-btn.on small { color: var(--mint-deep); }
 .sound-btn.on #sound-icon { animation: pulse 2.4s ease-in-out infinite; }
@@ -577,3 +580,22 @@ button { cursor: pointer; border: none; background: none; }
 .sound-option.active { background: var(--mint-soft); color: var(--mint-deep); box-shadow: inset 0 0 0 2px var(--mint); }
 .sound-volume { display: flex; align-items: center; gap: 8px; margin: 16px 0 8px; }
 .sound-volume input { flex: 1; accent-color: var(--mint-deep); }
+
+/* 작은 화면에서는 더 촘촘하게 */
+@media (max-height: 720px) {
+  .hero { gap: 10px; padding-top: calc(64px + var(--safe-top)); }
+  .mode-card { padding: 8px 10px; }
+  .mode-icon { font-size: 22px; }
+}
+@media (max-width: 360px) {
+  .mode-text small { display: none; }
+  .mode-cards { gap: 8px; }
+}
+.hero > * { flex-shrink: 0; }
+/* 빈 칸이 있으면 가운데로, 넘치면 위에서부터 (오래된 휴대폰에서도 동작) */
+.hero::before, .hero::after { content: ""; margin: auto 0; }
+@media (max-height: 720px) {
+  .ring { width: min(56vw, 230px, 28svh); margin-top: 0; }
+  .clock { font-size: 3.2rem; }
+  .cta { padding: 13px; }
+}
