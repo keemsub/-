@@ -62,7 +62,7 @@ button { cursor: pointer; border: none; background: none; }
   left: 18px;
   right: 14px;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   z-index: 5;
 }
@@ -458,3 +458,41 @@ button { cursor: pointer; border: none; background: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- 걷기 / 비행기 여행 ---------- */
+.mode-switch { margin-bottom: 10px; }
+.mode-switch .chip { padding: 7px 16px; }
+.fly-note { margin: 0 4px 4px; }
+.fly-list li button { display: flex; align-items: center; gap: 12px; }
+.fly-flag { font-size: 1.7rem; line-height: 1; }
+.fly-main { flex: 1; min-width: 0; }
+.fly-time { font-weight: 800; color: var(--mint-deep); white-space: nowrap; font-size: 0.9rem; }
+
+/* 지도 위 비행기: 걷는 통통 효과 대신 살랑살랑 떠 있어요 */
+.fly .walker-body, .fly .walking .walker-body { transform: none; animation: none; font-size: 40px; }
+.fly .walker-body .plane { display: inline-block; transition: transform 0.4s; }
+.fly .walking .walker-body { animation: float 2.4s ease-in-out infinite; }
+@keyframes float { 50% { translate: 0 -6px; } }
+
+/* 첫 화면 캐릭터: 비행기 창문 안에서 하늘을 봐요 */
+.fly #hero-avatar {
+  background: linear-gradient(180deg, #9fd3ff 0%, #d9eeff 70%, #fff6e6 100%);
+  box-shadow: inset 0 0 0 9px #f1ece6, inset 0 0 0 11px #d8cfc4, 0 6px 16px rgb(80 110 150 / 20%);
+  overflow: hidden;
+}
+.fly #hero-avatar::before {
+  content: "☁️    ☁️";
+  white-space: pre;
+  position: absolute;
+  top: 18%;
+  left: -40%;
+  font-size: 22px;
+  opacity: 0.9;
+  animation: clouds 9s linear infinite;
+  pointer-events: none;
+}
+.fly #hero-avatar.walking::before { animation-duration: 4s; }
+@keyframes clouds { to { left: 110%; } }
+/* 비행기 여행 중에는 '거리 걷기' 탭을 숨겨요 */
+.fly .tabbar { grid-template-columns: repeat(3, 1fr); }
+.fly .tab[data-tab="street"] { display: none; }

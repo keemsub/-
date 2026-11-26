@@ -14,6 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.auth import router as auth_router
 from app.avatar import catalog
 from app.config import get_settings
+from app.flights import catalog as flight_catalog
 from app.isochrone import CachedProvider, DemoProvider, IsochroneProvider, OrsProvider
 from app.journey import Geocoder, NominatimGeocoder, OrsRouter, OsmFootRouter, Router
 from app.places import OverpassProvider, PlaceProvider, outer_ring, pick_destination
@@ -62,7 +63,9 @@ def get_router() -> Router:
 
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
-    return templates.TemplateResponse(request, "index.html", {"avatar": catalog()})
+    return templates.TemplateResponse(
+        request, "index.html", {"avatar": catalog(), "flights": flight_catalog()}
+    )
 
 
 @app.get("/privacy", response_class=HTMLResponse)
