@@ -6,6 +6,7 @@
 
 import math
 import random
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import asdict, dataclass
 from typing import Any, Protocol
 
@@ -89,17 +90,37 @@ class OverpassProvider:
         filters = "".join(
             f'nwr["{k}"~"^({"|".join(vs)})$"]["name"]({around});' for k, vs in groups.items()
         )
-        query = f"[out:json][timeout:20];({filters});out center 400;"
-        last_error: Exception | None = None
-        for url in OVERPASS_MIRRORS:
-            try:
-                response = self.client.post(url, data={"data": query}, timeout=25)
-                response.raise_for_status()
-                elements = response.json().get("elements", [])
-                return [p for el in elements if (p := _to_place(el, ATTRACTIONS))]
-            except (httpx.HTTPError, ValueError) as exc:
-                last_error = exc
-        raise httpx.HTTPError(f"모든 장소 서버가 실패했어요: {last_error}")
+        query = f"[out:json][timeout:12];({filters});out center 300;"
+        return self._ask_fast(query)
+
+    def _ask_one(self, url: str, query: str) -> list[Place]:
+        response = self.client.post(url, data={"data": query}, timeout=15)
+        response.raise_for_status()
+        elements = response.json().get("elements", [])
+        return [p for el in elements if (p := _to_place(el, ATTRACTIONS))]
+
+    def _ask_fast(self, query: str, head_start: float = 2.5) -> list[Place]:
+        """먼저 기본 서버에 묻고, 2.5초 안에 답이 없거나 실패하면 다른 서버에도 같이 물어요.
+        가장 먼저 온 답을 써요. (공용 무료 서버에 부담을 덜 주면서 빠르게)"""
+        pool = ThreadPoolExecutor(max_workers=len(OVERPASS_MIRRORS))
+        try:
+            pending = {pool.submit(self._ask_one, OVERPASS_MIRRORS[0], query)}
+            done, pending = wait(pending, timeout=head_start)
+            failed = [f for f in done if f.exception()]
+            for f in done:
+                if not f.exception():
+                    return f.result()
+            pending |= {pool.submit(self._ask_one, url, query) for url in OVERPASS_MIRRORS[1:]}
+            last_error: BaseException | None = failed[0].exception() if failed else None
+            while pending:
+                done, pending = wait(pending, return_when=FIRST_COMPLETED)
+                for f in done:
+                    if f.exception() is None:
+                        return f.result()
+                    last_error = f.exception()
+            raise httpx.HTTPError(f"모든 장소 서버가 실패했어요: {last_error}")
+        finally:
+            pool.shutdown(wait=False, cancel_futures=True)
 
 
 def pick_destination(

@@ -47,6 +47,10 @@
         <span class="mode-icon">✈️</span>
         <span class="mode-text"><b>여행 모드</b><small>비행기로 해외</small></span>
       </button>
+      <button class="mode-card" data-mode="train" role="radio">
+        <span class="mode-icon">🚄</span>
+        <span class="mode-text"><b>기차 모드</b><small>KTX로 전국</small></span>
+      </button>
     </div>
     <div class="dest-row">
       <button id="dest-chip" class="dest-chip">
@@ -189,6 +193,19 @@
     </div>
   </div>
 
+  <!-- 기차 여행지 고르기 -->
+  <div id="train-modal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="handle"></div>
+      <div class="modal-head">
+        <p class="modal-title">🚄 어디로 떠날까요?</p>
+        <button class="close" data-close="train-modal" aria-label="닫기">✕</button>
+      </div>
+      <p class="muted small fly-note">서울역에서 출발해요. 실제 열차 소요시간만큼 집중하면 도착해요.</p>
+      <ul id="train-list" class="results fly-list"></ul>
+    </div>
+  </div>
+
   <!-- 목적지 고르기 -->
   <div id="dest-modal" class="modal" hidden>
     <div class="modal-card">
@@ -273,6 +290,7 @@
 
   <script id="avatar-catalog" type="application/json">{{ avatar | tojson }}</script>
   <script id="flight-catalog" type="application/json">{{ flights | tojson }}</script>
+  <script id="train-catalog" type="application/json">{{ trains | tojson }}</script>
   <script src="/static/vendor/maplibre/maplibre-gl.js"></script>
   <script src="/static/avatar.js"></script>
   <script src="/static/sound.js"></script>
