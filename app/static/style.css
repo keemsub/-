@@ -366,6 +366,15 @@ button { cursor: pointer; border: none; background: none; }
 .item-icon.try-on { width: 46px; height: 46px; border-radius: 50%; background: #f3f7f1; overflow: hidden; display: grid; place-items: center; }
 .item-icon.try-on svg { width: 40px; height: 48px; margin-top: 6px; }
 @keyframes step { from { transform: rotate(-14deg); } to { transform: rotate(14deg); } }
+.foot-actions { display: flex; align-items: center; gap: 6px; flex: none; }
+.foot-actions .text-btn, .street-btn { white-space: nowrap; }
+.map-card-foot #journey-text { min-width: 0; }
+.street-btn { font-size: 0.82rem; padding: 7px 12px; }
+.street-btn[aria-pressed="true"] { background: var(--mint-soft); color: var(--mint-deep); }
+/* 거리 시점: 캐릭터를 크게, 그림자를 넓게 */
+.street .walker-body { font-size: 76px; }
+.street .walker-shadow { width: 52px; height: 12px; margin-top: -6px; }
+.street .fig-pet { font-size: 0.26em; left: auto; right: -0.42em; }
 @keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 @keyframes fade { from { opacity: 0; } }
 @keyframes rise { from { transform: translateY(60px); opacity: 0; } }

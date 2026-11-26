@@ -194,7 +194,7 @@ const map = new maplibregl.Map({
   pitch: MAP_STYLES[styleIndex].pitch,
   bearing: -12,
   attributionControl: { compact: true },
-  maxPitch: 70,
+  maxPitch: 85,
 });
 
 const EMPTY_LINE = { type: "Feature", geometry: { type: "LineString", coordinates: [] } };
@@ -249,14 +249,37 @@ function addOverlays() {
   });
   drawJourney();
 }
-map.on("style.load", addOverlays);
+map.on("style.load", () => {
+  addOverlays();
+  applySky();
+});
+
+// 하늘과 지평선 안개: 땅 가까이 기울였을 때 수평선이 자연스럽게 보여요.
+function applySky() {
+  if (!map.setSky) return;
+  try {
+    map.setSky({
+      "sky-color": "#bfe3ff",
+      "sky-horizon-blend": 0.6,
+      "horizon-color": "#fff1e2",
+      "horizon-fog-blend": 0.7,
+      "fog-color": "#fff6ec",
+      "fog-ground-blend": 0.35,
+    });
+  } catch {
+    // 하늘을 지원하지 않는 환경이면 그냥 넘어가요.
+  }
+}
 
 // 아래 카드에 가리지 않도록 지도의 '가운데'를 카드 위쪽으로 올려요.
 function updatePadding() {
   // 지도 크게 보기에서는 아래 카드만큼 비워 두고, 집중 화면에서는 가운데 그대로
   const card = document.querySelector(".map-card");
   const mapView = document.body.classList.contains("view-map");
-  map.setPadding({ top: 70, bottom: mapView ? card.offsetHeight + 14 : 0, left: 0, right: 0 });
+  const bottom = mapView ? card.offsetHeight + 14 : 0;
+  // 거리 시점에서는 캐릭터가 화면 아래쪽에 서고 앞길이 넓게 보이도록 위를 더 비워요.
+  const top = streetOn() ? Math.round(innerHeight * 0.38) : 70;
+  map.setPadding({ top, bottom, left: 0, right: 0 });
 }
 addEventListener("resize", updatePadding);
 
@@ -297,8 +320,10 @@ function setWalker(lngLat, nextLngLat) {
   }
   const body = walkerEl.querySelector(".walker-body");
   if (!body.firstChild) paintFigure(body);
-  // 동물 이모지는 대부분 왼쪽을 보고 있어서, 오른쪽(동쪽)으로 갈 땐 뒤집어요.
-  if (nextLngLat) body.classList.toggle("flip", nextLngLat[0] > lngLat[0]);
+  // 거리 시점에서는 늘 진행 방향을 보고 있으니 뒤집지 않아요.
+  if (streetOn()) body.classList.remove("flip");
+  // 위에서 볼 때는 오른쪽(동쪽)으로 갈 때 뒤집어서 가는 방향을 보게 해요.
+  else if (nextLngLat) body.classList.toggle("flip", nextLngLat[0] > lngLat[0]);
 }
 
 function drawJourney() {
@@ -324,7 +349,7 @@ function drawJourney() {
 }
 
 function focusWalker(animate = true) {
-  if (!journey || !path) return;
+  if (!journey || !path || streetOn()) return;
   const here = pointAt(path, journey.walked_m).point;
   const s = MAP_STYLES[styleIndex];
   lastFollow = Date.now() + 1300; // 이 이동이 끝날 때까지 따라가기를 잠시 멈춰요
@@ -338,6 +363,84 @@ function overview() {
     new maplibregl.LngLatBounds(path.coords[0], path.coords[0]),
   );
   map.fitBounds(bounds, { padding: 40, pitch: 0, bearing: 0, maxZoom: 16 });
+}
+
+// ---------- 거리 걷기 시점 (3인칭) ----------
+// 카메라를 땅 가까이 눕혀 캐릭터 뒤를 따라가고, 길이 꺾이면 카메라도 같이 돌아요.
+let streetMode = store.get("streetMode", false);
+let streetFrame = null;
+let camBearing = null;
+const STREET = { pitch: 78, zoom: 18.4 };
+const streetOn = () => streetMode && document.body.classList.contains("view-map") && !!path;
+
+// 두 지점 사이 방향(북쪽 0°, 시계 방향)
+function bearingBetween([lon1, lat1], [lon2, lat2]) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const y = Math.sin(toRad(lon2 - lon1)) * Math.cos(toRad(lat2));
+  const x =
+    Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lon2 - lon1));
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
+// 지금 이 순간 걸은 거리 (타이머 틱보다 촘촘하게, 화면이 부드럽도록)
+function liveMeters() {
+  if (!session) return journey.walked_m;
+  const remaining = ticker ? Math.max(0, session.endAt - Date.now()) : session.remainingMs;
+  const elapsed = session.durationMs - remaining;
+  return Math.min(session.targetM, session.startM + elapsed * session.speed);
+}
+
+function streetStep() {
+  streetFrame = null;
+  if (!streetOn()) return;
+  const d = liveMeters();
+  const here = pointAt(path, d).point;
+  // 30m 앞을 보고 방향을 정하면 작은 꺾임에 카메라가 흔들리지 않아요.
+  const ahead = pointAt(path, Math.min(path.total, d + 30)).point;
+  const target = here[0] === ahead[0] && here[1] === ahead[1] ? camBearing ?? 0 : bearingBetween(here, ahead);
+  if (camBearing === null) camBearing = target;
+  const diff = ((target - camBearing + 540) % 360) - 180; // 가장 짧은 쪽으로 돌기
+  camBearing = (camBearing + diff * 0.06 + 360) % 360;
+  setWalker(here);
+  if (session) setLine("wm-walked", sliceTo(path, d));
+  map.jumpTo({ center: here, bearing: camBearing, pitch: STREET.pitch, zoom: STREET.zoom });
+  streetFrame = requestAnimationFrame(streetStep);
+}
+
+function syncStreet() {
+  document.body.classList.toggle("street", streetOn());
+  $("btn-street").textContent = streetMode ? "🗺️ 위에서 보기" : "🚶 거리 시점";
+  $("btn-street").setAttribute("aria-pressed", String(streetMode));
+  if (walkerShown) paintFigure(walkerEl.querySelector(".walker-body"));
+  if (streetOn() && !streetFrame) {
+    camBearing = null;
+    // 처음 들어갈 때는 부드럽게 내려앉고, 그다음부터 매 프레임 따라가요.
+    const d = liveMeters();
+    const here = pointAt(path, d).point;
+    const ahead = pointAt(path, Math.min(path.total, d + 30)).point;
+    camBearing = bearingBetween(here, ahead);
+    updatePadding();
+    map.easeTo({ center: here, bearing: camBearing, pitch: STREET.pitch, zoom: STREET.zoom, duration: 1400 });
+    map.once("moveend", () => {
+      if (streetOn() && !streetFrame) streetFrame = requestAnimationFrame(streetStep);
+    });
+  } else if (!streetOn() && streetFrame) {
+    cancelAnimationFrame(streetFrame);
+    streetFrame = null;
+  }
+}
+
+function setStreetMode(on, refocus = true) {
+  streetMode = on;
+  store.set("streetMode", on, { sync: false });
+  if (!on && streetFrame) {
+    cancelAnimationFrame(streetFrame);
+    streetFrame = null;
+  }
+  syncStreet();
+  updatePadding();
+  if (!on && refocus) focusWalker();
 }
 
 // ---------- 여정 표시 ----------
@@ -388,7 +491,8 @@ const hasItem = (item) => (item.price === 0 && !item.premium) || owned.includes(
 // 사람 아바타(SVG)를 그리고, 같이 걷는 친구(동물)를 발치에 둬요. 크기는 글자 크기(em)를 따라가요.
 function paintFigure(el) {
   el.classList.add("figure");
-  el.innerHTML = `${Avatar.svg(outfit)}<span class="fig-pet"></span>`;
+  const back = el.classList.contains("walker-body") && streetOn();
+  el.innerHTML = `${Avatar.svg(outfit, { back })}<span class="fig-pet"></span>`;
   el.querySelector(".fig-pet").textContent = character.emoji;
 }
 
@@ -521,6 +625,7 @@ function setView(view, follow = true) {
   // focus: 캐릭터와 타이머 중심(지도는 흐리게) / map: 지도 크게 보기
   document.body.classList.toggle("view-focus", view === "focus");
   document.body.classList.toggle("view-map", view === "map");
+  syncStreet();
   $("btn-view").textContent = view === "map" ? "⏱️" : "🗺️";
   $("btn-view").setAttribute("aria-label", view === "map" ? "타이머로 돌아가기" : "지도 크게 보기");
   requestAnimationFrame(() => {
@@ -544,7 +649,9 @@ async function setJourney(name, address, dest) {
     drawJourney();
     renderJourney();
     setView("map", false);
-    setTimeout(overview, 450);
+    setTimeout(() => {
+      if (!streetMode) overview(); // 거리 시점이면 바로 캐릭터 뒤에서 출발해요
+    }, 450);
     const where = origin.fallback ? "서울시청에서 출발해요 (위치 권한이 없어요). " : "";
     const sessions = Math.ceil(route.distance_m / ((WALK_KMH * 1000 * minutes) / 60));
     $("status").textContent =
@@ -692,7 +799,7 @@ function tick() {
   const ahead = pointAt(path, d + 30).point;
   setWalker(here, ahead);
   setLine("wm-walked", sliceTo(path, d));
-  if (Date.now() - lastFollow > 1500) {
+  if (!streetOn() && Date.now() - lastFollow > 1500) {
     lastFollow = Date.now();
     map.easeTo({ center: here, duration: 1400, easing: (t) => t });
   }
@@ -863,7 +970,11 @@ $("btn-view").addEventListener("click", () =>
   setView(document.body.classList.contains("view-map") ? "focus" : "map"),
 );
 $("btn-back").addEventListener("click", () => setView("focus"));
-$("btn-overview").addEventListener("click", overview);
+$("btn-overview").addEventListener("click", () => {
+  if (streetMode) setStreetMode(false, false);
+  overview();
+});
+$("btn-street").addEventListener("click", () => setStreetMode(!streetMode));
 $("search-form").addEventListener("submit", searchPlaces);
 $("btn-random").addEventListener("click", randomDestination);
 $("btn-pick").addEventListener("click", startPicking);

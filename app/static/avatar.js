@@ -156,11 +156,45 @@
     );
   }
 
-  function svg(o) {
+  // 뒤에서 본 머리: 얼굴 대신 머리카락이 머리를 덮어요 (거리 걷기 시점용)
+  function backHead(o) {
+    const c = o.hairColor;
+    const cover =
+      o.hair === "hair-spiky"
+        ? `<path fill="${c}" d="M26 64 L27 33 L36 39 L40 19 L50 31 L60 12 L70 31 L80 19 L84 39 L93 33 L94 64 Q60 76 26 64Z"/>`
+        : o.hair === "hair-curly"
+          ? `<g fill="${c}"><ellipse cx="60" cy="52" rx="36" ry="30"/><circle cx="30" cy="62" r="9"/><circle cx="90" cy="62" r="9"/><circle cx="45" cy="70" r="8"/><circle cx="60" cy="72" r="8"/><circle cx="75" cy="70" r="8"/></g>`
+          : `<ellipse cx="60" cy="52" rx="35" ry="30" fill="${c}"/>` +
+            (o.hair === "hair-long" ? `<path fill="${c}" d="M26 58 H94 Q98 84 92 104 Q88 112 76 108 Q60 114 44 108 Q32 112 28 104 Q22 84 26 58Z"/>` : "") +
+            (o.hair === "hair-bob" ? `<path fill="${c}" d="M25 58 H95 L96 82 Q96 88 90 88 H30 Q24 88 24 82Z"/>` : "") +
+            `<path d="M60 26 Q58 46 60 62" stroke="${shade(c, -0.2)}" stroke-width="1.6" fill="none"/>`;
+    return (
+      `<circle cx="27" cy="61" r="6" fill="${o.skin}"/><circle cx="93" cy="61" r="6" fill="${o.skin}"/>` +
+      `<ellipse cx="60" cy="56" rx="34" ry="31" fill="${o.skin}"/>` +
+      cover
+    );
+  }
+
+  function svg(o, opts = {}) {
     const id = ++uid;
     const hair = HAIR[o.hair] || HAIR["hair-short"];
     const top = TOP[o.top] || TOP["top-tee"];
     const bag = BAG[o.bag] || {};
+    if (opts.back) {
+      // 뒷모습: 가방은 등 위에, 얼굴 대신 뒷머리
+      const backpack = o.bag === "bag-backpack" ? `<rect x="43" y="95" width="34" height="31" rx="9" fill="#ff8a5c"/><rect x="49" y="108" width="22" height="12" rx="4" fill="#e76f42"/>` : "";
+      const parts = [
+        HOOD_BACK[o.top] && o.top === "top-hoodie" ? HOOD_BACK[o.top](o.topColor) : "",
+        top(o.topColor, o.skin, id),
+        backpack,
+        o.bag !== "bag-backpack" ? bag.front || "" : "",
+        backHead(o),
+        hair.back ? hair.back(o.hairColor) : "",
+        o.top === "top-raincoat" ? `<path fill="${o.topColor}" d="M22 60 C20 26 100 26 98 60 Q60 80 22 60Z"/>` : "",
+        HAT[o.hat] || "",
+      ];
+      return `<svg class="avatar-svg" viewBox="0 0 120 146" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${parts.join("")}</svg>`;
+    }
     const parts = [
       bag.back || "",
       HOOD_BACK[o.top] ? HOOD_BACK[o.top](o.topColor) : "",
