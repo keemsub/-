@@ -31,7 +31,7 @@ from app.weather import OpenMeteoWeather
 
 BASE_DIR = Path(__file__).parent
 
-app = FastAPI(title="걸음모도로")
+app = FastAPI(title="뽀모도로")
 settings = get_settings()
 # 로그인 상태를 서명된 쿠키에 저장해요 (60일 유지)
 app.add_middleware(

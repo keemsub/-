@@ -15,7 +15,7 @@ Render에 값 넣는 곳: Render 대시보드 → walkmodoro 서비스 → 왼�
 
 ## 2. 카카오 로그인
 
-1. [Kakao Developers](https://developers.kakao.com) → 로그인 → **내 애플리케이션 → 애플리케이션 추가하기** (앱 이름: 걸음모도로)
+1. [Kakao Developers](https://developers.kakao.com) → 로그인 → **내 애플리케이션 → 애플리케이션 추가하기** (앱 이름: 뽀모도로)
 2. **앱 설정 → 플랫폼 → Web 플랫폼 등록**: 사이트 도메인에 `내주소` 입력
 3. **제품 설정 → 카카오 로그인**: 활성화 **ON**, Redirect URI에 `내주소/auth/kakao/callback` 등록
 4. **제품 설정 → 카카오 로그인 → 동의항목**: **닉네임**을 '필수 동의'로
