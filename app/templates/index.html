@@ -23,7 +23,6 @@
   <canvas id="weather-fx" aria-hidden="true"></canvas>
 
   <header class="topbar">
-    <p class="brand">걸음모도로</p>
     <div class="top-actions">
       <button id="weather-chip" class="weather-chip" hidden></button>
       <button id="btn-coins" class="coin-pill" aria-label="발자국 코인, 꾸미기">🐾 <span id="coin-count">0</span></button>
@@ -35,8 +34,12 @@
 
   <!-- 첫 화면: 캐릭터, 큰 타이머, 시작 버튼 -->
   <main class="hero">
+    <div id="mode-switch" class="segmented mode-switch" role="radiogroup" aria-label="여행 방법">
+      <button class="chip" data-mode="walk">🚶 걷기</button>
+      <button class="chip" data-mode="fly">✈️ 여행</button>
+    </div>
     <button id="dest-chip" class="dest-chip">
-      <span class="dest-flag">🏁</span>
+      <span id="dest-flag" class="dest-flag">🏁</span>
       <span id="dest-name">목적지를 정해 주세요</span>
       <span id="dest-pct" class="dest-pct"></span>
     </button>
@@ -75,7 +78,7 @@
     <div class="map-card-head">
       <div class="journey-info">
         <p id="journey-mode" class="eyebrow"></p>
-        <p class="journey-title">🏁 <span id="journey-name">목적지 없음</span></p>
+        <p class="journey-title"><span id="journey-flag">🏁</span> <span id="journey-name">목적지 없음</span></p>
       </div>
     </div>
     <div class="progress"><div id="journey-bar" class="progress-bar"></div></div>
@@ -134,6 +137,9 @@
       <p class="section-title">지도 모양</p>
       <div id="style-options" class="segmented wide"></div>
 
+      <p class="section-title">지도 위 이름</p>
+      <div id="label-options" class="segmented wide"></div>
+
       <p class="section-title">오늘의 기록</p>
       <div class="stats">
         <div><p id="stat-minutes" class="stat-num">0분</p><p class="muted small">집중</p></div>
@@ -144,6 +150,19 @@
       <p class="legal-links muted small">
         <a href="/privacy">개인정보처리방침</a> · <a href="/terms">이용약관</a>
       </p>
+    </div>
+  </div>
+
+  <!-- 비행기 여행지 고르기 -->
+  <div id="fly-modal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="handle"></div>
+      <div class="modal-head">
+        <p class="modal-title">✈️ 어느 나라로 날아갈까요?</p>
+        <button class="close" data-close="fly-modal" aria-label="닫기">✕</button>
+      </div>
+      <p class="muted small fly-note">인천공항에서 출발해요. 실제 비행시간만큼 집중하면 도착해요.</p>
+      <ul id="fly-list" class="results fly-list"></ul>
     </div>
   </div>
 
@@ -215,6 +234,7 @@
   <canvas id="confetti" aria-hidden="true"></canvas>
 
   <script id="avatar-catalog" type="application/json">{{ avatar | tojson }}</script>
+  <script id="flight-catalog" type="application/json">{{ flights | tojson }}</script>
   <script src="/static/vendor/maplibre/maplibre-gl.js"></script>
   <script src="/static/avatar.js"></script>
   <script src="/static/app.js"></script>
