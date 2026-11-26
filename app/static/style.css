@@ -1,13 +1,18 @@
 :root {
   --bg: #fffaf0;
+  --card: #ffffff;
   --ink: #3b3a36;
+  --muted: #8a877d;
   --accent: #5fb38a;
+  --accent-soft: #e3f4ea;
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 
 body {
-  margin: 0;
+  margin: 0 auto;
+  max-width: 720px;
   padding: 16px;
   font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   background: var(--bg);
@@ -15,12 +20,53 @@ body {
 }
 
 header h1 { margin: 0; font-size: 1.6rem; }
-.sub { margin: 4px 0 16px; opacity: 0.7; }
+.sub { margin: 4px 0 16px; color: var(--muted); }
 
-.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-select, button { font: inherit; padding: 8px 12px; border-radius: 12px; border: 1px solid #ccc; }
-button { background: var(--accent); color: white; border: none; cursor: pointer; }
+.card {
+  background: var(--card);
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 6%);
+}
 
-.status { min-height: 1.4em; }
+.clock {
+  font-size: 3.5rem;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 2px;
+}
 
-#map { height: 70vh; border-radius: 16px; }
+.controls { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+
+select, button, .button {
+  font: inherit;
+  padding: 10px 16px;
+  border-radius: 14px;
+  border: 1px solid #ddd;
+  background: white;
+  color: var(--ink);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-block;
+}
+.primary { background: var(--accent); color: white; border: none; }
+.ghost { color: var(--muted); }
+
+.status { text-align: center; min-height: 1.4em; color: var(--muted); margin-bottom: 0; }
+.muted { color: var(--muted); }
+
+.arrival { background: var(--accent-soft); }
+.arrival-title { font-size: 1.3rem; font-weight: 700; margin-top: 0; }
+.tag { white-space: nowrap; font-size: 0.85rem; background: white; padding: 2px 8px; border-radius: 999px; }
+
+#map { height: 55vh; border-radius: 20px; margin-bottom: 16px; }
+
+.today-title { font-weight: 700; margin-top: 0; }
+#today-trips { padding-left: 20px; margin-bottom: 0; }
+
+/* 지도 위 거북이와 깃발 */
+.emoji-marker { font-size: 28px; line-height: 1; text-align: center; }
+.walking { animation: bob 0.6s ease-in-out infinite alternate; }
+@keyframes bob { from { transform: translateY(0); } to { transform: translateY(-4px); } }
