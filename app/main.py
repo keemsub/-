@@ -167,6 +167,7 @@ def attraction(
     lat: Annotated[float, Query(ge=-90, le=90, description="위도")],
     lon: Annotated[float, Query(ge=-180, le=180, description="경도")],
     places: Annotated[PlaceProvider, Depends(get_place_provider)],
+    geocoder: Annotated[Geocoder, Depends(get_geocoder)],
     km: Annotated[float, Query(ge=0.5, le=30, description="이 거리 안에서 고를게요(km)")] = 3,
 ):
     """🎲 랜덤 명소: 지금 위치에서 정한 거리 안의 볼거리 하나."""
@@ -176,6 +177,15 @@ def attraction(
     except httpx.HTTPError:
         candidates = []  # 장소 검색이 실패해도 어딘가로는 떠나요.
     destination = pick_attraction(candidates, lat, lon, radius)
+    if destination.kind == "미지의 장소":
+        # 명소를 못 찾았으면 그 지점의 실제 지명(공원·건물·동네+길 이름)을 붙여요
+        try:
+            name = geocoder.reverse(destination.lat, destination.lon)
+        except (httpx.HTTPError, AttributeError, ValueError):
+            name = None
+        if name:
+            destination.name = name
+            destination.kind = "근처 장소"
     return {"destination": destination.to_dict(), "candidates": len(candidates), "km": km}
 
 

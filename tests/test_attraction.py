@@ -3,8 +3,9 @@ import random
 import httpx
 from fastapi.testclient import TestClient
 
-from app.main import app, get_place_provider
-from app.places import Place, haversine_m, pick_attraction
+from app.journey import place_name
+from app.main import app, get_geocoder, get_place_provider
+from app.places import OVERPASS_MIRRORS, OverpassProvider, Place, haversine_m, pick_attraction
 
 client = TestClient(app)
 ORIGIN = (37.5665, 126.978)
@@ -26,8 +27,20 @@ class FakeAround:
         return [Place(p.name, p.kind, p.lat, p.lon) for p in self.places]
 
 
-def _get(fake, km):
+class FakeGeocoder:
+    def __init__(self, name="역삼동 테헤란로"):
+        self.name = name
+
+    def search(self, query):
+        return []
+
+    def reverse(self, lat, lon):
+        return self.name
+
+
+def _get(fake, km, geocoder=None):
     app.dependency_overrides[get_place_provider] = lambda: fake
+    app.dependency_overrides[get_geocoder] = lambda: geocoder or FakeGeocoder(None)
     try:
         return client.get("/api/attraction", params={"lat": ORIGIN[0], "lon": ORIGIN[1], "km": km})
     finally:
@@ -68,3 +81,47 @@ def test_page_has_mode_cards_dice_and_sound():
     for needle in ('class="mode-card"', 'id="btn-dice"', 'id="sound-btn"', "/static/sound.js"):
         assert needle in html
     assert client.get("/static/sound.js").status_code == 200
+
+
+def test_attraction_fallback_gets_real_place_name():
+    res = _get(FakeAround(fail=True), 3, FakeGeocoder("선릉공원"))
+    dest = res.json()["destination"]
+    assert dest["name"] == "선릉공원"
+    assert dest["kind"] == "근처 장소"
+
+
+def test_place_name_prefers_name_then_area_and_road():
+    assert place_name({"name": "경복궁"}) == "경복궁"
+    assert (
+        place_name({"name": "", "address": {"suburb": "역삼동", "road": "테헤란로"}})
+        == "역삼동 테헤란로"
+    )
+    assert place_name({"address": {"leisure": "어린이공원", "road": "논현로"}}) == "어린이공원"
+    assert place_name({}) is None
+
+
+def test_overpass_tries_next_mirror_when_busy():
+    tried = []
+
+    def handler(request):
+        tried.append(str(request.url))
+        if len(tried) == 1:
+            return httpx.Response(429)
+        return httpx.Response(
+            200,
+            json={
+                "elements": [
+                    {
+                        "type": "node",
+                        "lat": 37.58,
+                        "lon": 126.977,
+                        "tags": {"name": "경복궁", "historic": "castle"},
+                    },
+                ]
+            },
+        )
+
+    provider = OverpassProvider(client=httpx.Client(transport=httpx.MockTransport(handler)))
+    places = provider.find_around(*ORIGIN, 3000)
+    assert [p.name for p in places] == ["경복궁"]
+    assert tried[:2] == OVERPASS_MIRRORS[:2]

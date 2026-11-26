@@ -17,6 +17,7 @@ import httpx
 from app.places import haversine_m
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
 # 경로 안의 driving은 이름일 뿐이고, routed-foot 서버는 항상 도보 길로 답해요.
 OSM_FOOT_URL = "https://routing.openstreetmap.de/routed-foot/route/v1/driving"
 ORS_DIRECTIONS_URL = "https://api.openrouteservice.org/v2/directions/foot-walking/geojson"
@@ -46,6 +47,8 @@ class Route:
 
 class Geocoder(Protocol):
     def search(self, query: str) -> list[SearchResult]: ...
+
+    def reverse(self, lat: float, lon: float) -> str | None: ...
 
 
 class Router(Protocol):
@@ -81,6 +84,44 @@ class NominatimGeocoder:
             self._cache.clear()
         self._cache[key] = results
         return results
+
+    def reverse(self, lat: float, lon: float) -> str | None:
+        """좌표 근처의 이름(공원·건물·길 이름 등). 못 찾으면 None."""
+        with self._lock:
+            wait = self.min_interval - (time.monotonic() - self._last)
+            if wait > 0:
+                time.sleep(wait)
+            response = self.client.get(
+                NOMINATIM_REVERSE_URL,
+                params={
+                    "lat": lat,
+                    "lon": lon,
+                    "format": "jsonv2",
+                    "zoom": 17,
+                    "accept-language": "ko",
+                },
+            )
+            self._last = time.monotonic()
+        response.raise_for_status()
+        return place_name(response.json())
+
+
+def place_name(data: dict) -> str | None:
+    """Nominatim 역지오코딩 결과에서 사람이 알아볼 이름을 골라요."""
+    if data.get("name"):
+        return data["name"]
+    addr = data.get("address") or {}
+    for key in ("tourism", "leisure", "amenity", "building", "historic"):
+        if addr.get(key):
+            return addr[key]
+    area = next(
+        (addr[k] for k in ("neighbourhood", "quarter", "suburb", "village", "town") if addr.get(k)),
+        None,
+    )
+    road = addr.get("road")
+    if area and road:
+        return f"{area} {road}"
+    return road or area
 
 
 class StraightRouter:

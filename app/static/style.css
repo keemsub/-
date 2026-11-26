@@ -682,3 +682,6 @@ button { cursor: pointer; border: none; background: none; }
 .cloud-lane span:nth-child(8) { left: 82%; animation-delay: -2s; font-size: 44px; }
 @keyframes drift { to { top: 110%; } }
 .phase-night .cloud-lane span { opacity: 0.35; }
+/* 지도 카드의 시작 버튼 */
+.map-start { margin-top: 12px; padding: 13px; font-size: 1rem; }
+.map-start:disabled { background: #e9e2d8; color: var(--muted); box-shadow: none; }
