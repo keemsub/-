@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- 뽀모도로(토마토) 친구: 동그란 몸, 잎사귀 모자, 짧은 다리 -->
+  <ellipse cx="64" cy="118" rx="30" ry="5" fill="#000" opacity=".10"/>
+  <g fill="#e5634f">
+    <rect x="44" y="100" width="12" height="16" rx="6"/>
+    <rect x="72" y="100" width="12" height="16" rx="6"/>
+  </g>
+  <path d="M64 26c-30 0-50 18-50 43 0 24 21 41 50 41s50-17 50-41c0-25-20-43-50-43z" fill="#ff7a63"/>
+  <path d="M64 26c-30 0-50 18-50 43 0 24 21 41 50 41s50-17 50-41c0-25-20-43-50-43z" fill="none" stroke="#e5634f" stroke-width="3"/>
+  <ellipse cx="38" cy="52" rx="10" ry="6" fill="#fff" opacity=".55" transform="rotate(-30 38 52)"/>
+  <path d="M64 33 52 22l9 2-1-12 8 9 7-8v11l11-1-10 8 12 6-14 1z" fill="#5cc58a" stroke="#3fa36d" stroke-width="2.5" stroke-linejoin="round"/>
+  <circle cx="49" cy="70" r="6" fill="#4a2f2a"/>
+  <circle cx="79" cy="70" r="6" fill="#4a2f2a"/>
+  <circle cx="51" cy="68" r="2" fill="#fff"/>
+  <circle cx="81" cy="68" r="2" fill="#fff"/>
+  <ellipse cx="40" cy="82" rx="7" ry="4.5" fill="#ffb0a0"/>
+  <ellipse cx="88" cy="82" rx="7" ry="4.5" fill="#ffb0a0"/>
+  <path d="M57 81q7 7 14 0" fill="none" stroke="#4a2f2a" stroke-width="3.5" stroke-linecap="round"/>
+</svg>
