@@ -250,21 +250,25 @@ function addOverlays() {
   drawJourney();
 }
 map.on("style.load", () => {
+  for (const k of Object.keys(buildingOpacity)) delete buildingOpacity[k];
   addOverlays();
   applySky();
+  if (streetOn()) setStreetBuildings(true);
 });
 
 // 하늘과 지평선 안개: 땅 가까이 기울였을 때 수평선이 자연스럽게 보여요.
 function applySky() {
   if (!map.setSky) return;
   try {
+    const p = PHASES[phase];
+    const gloomy = ["cloudy", "rain", "storm", "fog", "snow"].includes(weatherNow?.kind);
     map.setSky({
-      "sky-color": "#bfe3ff",
+      "sky-color": gloomy && phase === "day" ? "#cdd6df" : p.sky,
       "sky-horizon-blend": 0.6,
-      "horizon-color": "#fff1e2",
-      "horizon-fog-blend": 0.7,
-      "fog-color": "#fff6ec",
-      "fog-ground-blend": 0.35,
+      "horizon-color": p.horizon,
+      "horizon-fog-blend": weatherNow?.kind === "fog" ? 0.95 : 0.7,
+      "fog-color": p.fog,
+      "fog-ground-blend": weatherNow?.kind === "fog" ? 0.75 : 0.35,
     });
   } catch {
     // 하늘을 지원하지 않는 환경이면 그냥 넘어가요.
@@ -276,7 +280,8 @@ function updatePadding() {
   // 지도 크게 보기에서는 아래 카드만큼 비워 두고, 집중 화면에서는 가운데 그대로
   const card = document.querySelector(".map-card");
   const mapView = document.body.classList.contains("view-map");
-  const bottom = mapView ? card.offsetHeight + 14 : 0;
+  const tabbar = document.querySelector(".tabbar").offsetHeight;
+  const bottom = mapView ? card.offsetHeight + tabbar + 14 : 0;
   // 거리 시점에서는 캐릭터가 화면 아래쪽에 서고 앞길이 넓게 보이도록 위를 더 비워요.
   const top = streetOn() ? Math.round(innerHeight * 0.38) : 70;
   map.setPadding({ top, bottom, left: 0, right: 0 });
@@ -350,7 +355,7 @@ function drawJourney() {
 
 function focusWalker(animate = true) {
   if (!journey || !path || streetOn()) return;
-  const here = pointAt(path, journey.walked_m).point;
+  const here = pointAt(path, session ? liveMeters() : journey.walked_m).point;
   const s = MAP_STYLES[styleIndex];
   lastFollow = Date.now() + 1300; // 이 이동이 끝날 때까지 따라가기를 잠시 멈춰요
   map.easeTo({ center: here, zoom: 16.2, pitch: s.pitch, bearing: -12, duration: animate ? 1200 : 0 });
@@ -391,9 +396,33 @@ function liveMeters() {
   return Math.min(session.targetM, session.startM + elapsed * session.speed);
 }
 
+// 걷는 중이거나 거리 시점이면 매 프레임 캐릭터(와 카메라)를 옮겨서 부드럽게 보여요.
+const walkingNow = () => !!(session && ticker && path);
+let userMovedAt = 0;
+map.on("dragstart", () => (userMovedAt = Date.now()));
+map.on("zoomstart", (e) => {
+  if (e.originalEvent) userMovedAt = Date.now();
+});
+function ensureFrames() {
+  if (!streetFrame && (streetOn() || walkingNow())) streetFrame = requestAnimationFrame(streetStep);
+}
+
 function streetStep() {
   streetFrame = null;
-  if (!streetOn()) return;
+  if (!streetOn()) {
+    if (!walkingNow()) return;
+    const d = liveMeters();
+    const here = pointAt(path, d).point;
+    setWalker(here, pointAt(path, d + 30).point);
+    setLine("wm-walked", sliceTo(path, d));
+    // 위에서 볼 때도 카메라가 캐릭터를 살살 따라가요. 지도를 직접 움직였다면 4초 동안은 그대로 둬요.
+    if (document.body.classList.contains("view-map") && Date.now() > lastFollow && Date.now() - userMovedAt > 4000) {
+      const c = map.getCenter();
+      map.jumpTo({ center: [c.lng + (here[0] - c.lng) * 0.06, c.lat + (here[1] - c.lat) * 0.06] });
+    }
+    streetFrame = requestAnimationFrame(streetStep);
+    return;
+  }
   const d = liveMeters();
   const here = pointAt(path, d).point;
   // 30m 앞을 보고 방향을 정하면 작은 꺾임에 카메라가 흔들리지 않아요.
@@ -409,10 +438,13 @@ function streetStep() {
 }
 
 function syncStreet() {
+  const wasStreet = document.body.classList.contains("street");
   document.body.classList.toggle("street", streetOn());
-  $("btn-street").textContent = streetMode ? "🗺️ 위에서 보기" : "🚶 거리 시점";
-  $("btn-street").setAttribute("aria-pressed", String(streetMode));
-  if (walkerShown) paintFigure(walkerEl.querySelector(".walker-body"));
+  renderTabs();
+  if (wasStreet !== streetOn()) {
+    setStreetBuildings(streetOn());
+    if (walkerShown) paintFigure(walkerEl.querySelector(".walker-body"));
+  }
   if (streetOn() && !streetFrame) {
     camBearing = null;
     // 처음 들어갈 때는 부드럽게 내려앉고, 그다음부터 매 프레임 따라가요.
@@ -425,19 +457,27 @@ function syncStreet() {
     map.once("moveend", () => {
       if (streetOn() && !streetFrame) streetFrame = requestAnimationFrame(streetStep);
     });
-  } else if (!streetOn() && streetFrame) {
-    cancelAnimationFrame(streetFrame);
-    streetFrame = null;
+  } else if (!streetOn()) {
+    ensureFrames();
+  }
+}
+
+// 거리 시점에서는 건물을 반투명하게 해서 캐릭터 뒤 건물이 시야를 가리지 않게 해요.
+const buildingOpacity = {};
+function setStreetBuildings(on) {
+  const style = map.getStyle?.();
+  if (!style) return;
+  for (const layer of style.layers.filter((l) => l.type === "fill-extrusion")) {
+    if (!(layer.id in buildingOpacity)) {
+      buildingOpacity[layer.id] = map.getPaintProperty(layer.id, "fill-extrusion-opacity") ?? 1;
+    }
+    map.setPaintProperty(layer.id, "fill-extrusion-opacity", on ? 0.32 : buildingOpacity[layer.id]);
   }
 }
 
 function setStreetMode(on, refocus = true) {
   streetMode = on;
   store.set("streetMode", on, { sync: false });
-  if (!on && streetFrame) {
-    cancelAnimationFrame(streetFrame);
-    streetFrame = null;
-  }
   syncStreet();
   updatePadding();
   if (!on && refocus) focusWalker();
@@ -626,8 +666,6 @@ function setView(view, follow = true) {
   document.body.classList.toggle("view-focus", view === "focus");
   document.body.classList.toggle("view-map", view === "map");
   syncStreet();
-  $("btn-view").textContent = view === "map" ? "⏱️" : "🗺️";
-  $("btn-view").setAttribute("aria-label", view === "map" ? "타이머로 돌아가기" : "지도 크게 보기");
   requestAnimationFrame(() => {
     updatePadding();
     if (follow && journey) focusWalker();
@@ -729,6 +767,7 @@ function setMode(mode) {
   $("btn-pause").textContent = mode === "paused" ? "계속하기" : "일시정지";
   $("minute-chips").hidden = mode !== "idle";
   $("dest-chip").disabled = mode !== "idle";
+  $("clock-btn").disabled = mode !== "idle";
   walkerEl.classList.toggle("walking", mode === "running");
   document.querySelector(".avatar").classList.toggle("walking", mode === "running");
 }
@@ -760,6 +799,7 @@ function resume() {
   ticker = setInterval(tick, 200);
   setMode("running");
   tick();
+  ensureFrames();
 }
 
 function pause() {
@@ -796,10 +836,11 @@ function tick() {
   const d = currentMeters();
 
   const here = pointAt(path, d).point;
-  const ahead = pointAt(path, d + 30).point;
-  setWalker(here, ahead);
-  setLine("wm-walked", sliceTo(path, d));
-  if (!streetOn() && Date.now() - lastFollow > 1500) {
+  if (!streetFrame) {
+    setWalker(here, pointAt(path, d + 30).point);
+    setLine("wm-walked", sliceTo(path, d));
+  }
+  if (!streetFrame && !streetOn() && Date.now() - lastFollow > 1500) {
     lastFollow = Date.now();
     map.easeTo({ center: here, duration: 1400, easing: (t) => t });
   }
@@ -961,20 +1002,43 @@ $("btn-settings").addEventListener("click", () => {
   renderSettings();
   openModal("settings-modal");
 });
-$("btn-coins").addEventListener("click", () => {
+function openCloset() {
   renderSettings();
-  openModal("settings-modal");
-  requestAnimationFrame(() => $("closet").scrollIntoView({ behavior: "smooth", block: "start" }));
-});
-$("btn-view").addEventListener("click", () =>
-  setView(document.body.classList.contains("view-map") ? "focus" : "map"),
-);
-$("btn-back").addEventListener("click", () => setView("focus"));
+  openModal("closet-modal");
+}
+$("btn-coins").addEventListener("click", openCloset);
 $("btn-overview").addEventListener("click", () => {
   if (streetMode) setStreetMode(false, false);
   overview();
 });
-$("btn-street").addEventListener("click", () => setStreetMode(!streetMode));
+
+// ---------- 아래 탭 ----------
+function currentTab() {
+  if (document.body.classList.contains("view-focus")) return "focus";
+  return streetMode ? "street" : "map";
+}
+function renderTabs() {
+  const active = currentTab();
+  for (const t of document.querySelectorAll(".tab")) {
+    const on = t.dataset.tab === active;
+    t.classList.toggle("active", on);
+    t.setAttribute("aria-current", on ? "page" : "false");
+  }
+}
+function setTab(tab) {
+  if (tab === "closet") return openCloset();
+  if (tab === "focus") return setView("focus");
+  if ((tab === "street" || tab === "map") && !journey) {
+    $("status").textContent = "먼저 목적지를 정해 주세요";
+    return openModal("dest-modal");
+  }
+  const wantStreet = tab === "street";
+  const fromMap = document.body.classList.contains("view-map");
+  if (streetMode !== wantStreet) setStreetMode(wantStreet, fromMap);
+  if (!fromMap) setView("map");
+  renderTabs();
+}
+for (const t of document.querySelectorAll(".tab")) t.addEventListener("click", () => setTab(t.dataset.tab));
 $("search-form").addEventListener("submit", searchPlaces);
 $("btn-random").addEventListener("click", randomDestination);
 $("btn-pick").addEventListener("click", startPicking);
@@ -1011,11 +1075,14 @@ function renderTimePicker() {
 for (const chip of document.querySelectorAll("#minute-chips .chip[data-min]")) {
   chip.addEventListener("click", () => setMinutes(chip.dataset.min));
 }
-$("chip-custom").addEventListener("click", () => {
+function openTimePicker() {
+  if (session) return; // 집중하는 동안에는 시간을 바꾸지 않아요
   draftMinutes = minutes;
   renderTimePicker();
   openModal("time-modal");
-});
+}
+$("chip-custom").addEventListener("click", openTimePicker);
+$("clock-btn").addEventListener("click", openTimePicker);
 $("time-range").addEventListener("input", (e) => {
   draftMinutes = clampMinutes(e.target.value);
   renderTimePicker();
@@ -1180,6 +1247,123 @@ async function initAccount() {
   $("status").textContent = `${me.user.nickname || "걷는 친구"}님, 오늘도 같이 걸어요`;
 }
 
+// ---------- 낮·밤과 날씨 (한국 시간 기준) ----------
+const PHASES = {
+  dawn: { name: "새벽", sky: "#f7c9d4", horizon: "#ffe3c4", fog: "#fbe6dc" },
+  day: { name: "낮", sky: "#bfe3ff", horizon: "#fff1e2", fog: "#fff6ec" },
+  dusk: { name: "노을", sky: "#f29f8f", horizon: "#ffd29a", fog: "#f7d9c4" },
+  night: { name: "밤", sky: "#1d2550", horizon: "#46507e", fog: "#2a3158" },
+};
+let phase = "day";
+let weatherNow = null;
+
+function seoulHour() {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "Asia/Seoul", hour: "numeric", minute: "numeric", hourCycle: "h23" })
+    .formatToParts(new Date());
+  const get = (t) => Number(parts.find((p) => p.type === t)?.value || 0);
+  return get("hour") + get("minute") / 60;
+}
+
+function phaseAt(hour) {
+  if (hour >= 5 && hour < 7) return "dawn";
+  if (hour >= 7 && hour < 17.5) return "day";
+  if (hour >= 17.5 && hour < 19.5) return "dusk";
+  return "night";
+}
+
+function applyAtmosphere() {
+  const params = new URLSearchParams(location.search);
+  phase = params.get("phase") || phaseAt(seoulHour()); // ?phase=night 로 미리 보기
+  for (const k of Object.keys(PHASES)) document.body.classList.toggle(`phase-${k}`, k === phase);
+  const kind = params.get("weather") || weatherNow?.kind || "clear";
+  for (const k of ["clear", "cloudy", "fog", "rain", "snow", "storm"]) {
+    document.body.classList.toggle(`wx-${k}`, k === kind);
+  }
+  applySky();
+  startWeatherFx(kind);
+  $("theme-color")?.setAttribute("content", phase === "night" ? "#1d2550" : "#fff6ec");
+}
+
+async function loadWeather() {
+  const pos = await getPosition();
+  try {
+    weatherNow = await api(`/api/weather?lat=${pos.lat}&lon=${pos.lon}`);
+    const chip = $("weather-chip");
+    chip.textContent = `${weatherNow.emoji} ${weatherNow.temp}°`;
+    chip.setAttribute("aria-label", `지금 날씨 ${weatherNow.label} ${weatherNow.temp}도`);
+    chip.hidden = false;
+  } catch {
+    weatherNow = null; // 날씨를 못 받아도 낮·밤은 그대로 보여요
+  }
+  applyAtmosphere();
+}
+
+$("weather-chip").addEventListener("click", () => {
+  if (!weatherNow) return;
+  const tips = {
+    clear: "산책하기 좋은 날이에요",
+    cloudy: "선선하게 걷기 좋아요",
+    fog: "안개가 꼈어요. 천천히 걸어요",
+    rain: "비가 와요. 오늘은 지도 속에서 걸어요",
+    snow: "눈이 와요! 미끄러우니 조심해요",
+    storm: "천둥번개가 쳐요. 실내에서 집중해요",
+  };
+  $("status").textContent = `지금 ${weatherNow.label} ${weatherNow.temp}° · ${PHASES[phase].name} · ${tips[weatherNow.kind]}`;
+});
+
+// 비·눈 내리는 효과 (가볍게, 움직임 줄이기 설정이면 꺼요)
+let fxFrame = null;
+function startWeatherFx(kind) {
+  const canvas = $("weather-fx");
+  cancelAnimationFrame(fxFrame);
+  const ctx = canvas.getContext("2d");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const falling = { rain: "rain", storm: "rain", snow: "snow" }[kind];
+  if (!falling || reduce) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+  const dpr = Math.min(2, devicePixelRatio || 1);
+  canvas.width = innerWidth * dpr;
+  canvas.height = innerHeight * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const n = falling === "rain" ? 70 : 55;
+  const drops = Array.from({ length: n }, () => ({
+    x: Math.random() * innerWidth,
+    y: Math.random() * innerHeight,
+    v: falling === "rain" ? 7 + Math.random() * 5 : 0.6 + Math.random() * 0.9,
+    r: falling === "rain" ? 10 + Math.random() * 8 : 1.5 + Math.random() * 2.5,
+    w: Math.random() * Math.PI * 2,
+  }));
+  (function frame() {
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    ctx.strokeStyle = phase === "night" ? "rgb(200 215 255 / 55%)" : "rgb(120 150 190 / 45%)";
+    ctx.fillStyle = "rgb(255 255 255 / 90%)";
+    ctx.lineWidth = 1.3;
+    for (const d of drops) {
+      if (falling === "rain") {
+        ctx.beginPath();
+        ctx.moveTo(d.x, d.y);
+        ctx.lineTo(d.x - 2, d.y + d.r);
+        ctx.stroke();
+        d.y += d.v;
+        d.x -= 0.6;
+      } else {
+        d.w += 0.02;
+        ctx.beginPath();
+        ctx.arc(d.x + Math.sin(d.w) * 8, d.y, d.r, 0, Math.PI * 2);
+        ctx.fill();
+        d.y += d.v;
+      }
+      if (d.y > innerHeight) {
+        d.y = -20;
+        d.x = Math.random() * innerWidth;
+      }
+    }
+    fxFrame = requestAnimationFrame(frame);
+  })();
+}
+
 // ---------- 앱 설치(PWA) ----------
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -1200,6 +1384,11 @@ initAccount().then(() => {
 
 renderCharacter();
 renderMinuteChips();
+renderTabs();
+applyAtmosphere();
+loadWeather();
+setInterval(applyAtmosphere, 5 * 60 * 1000); // 5분마다 낮·밤 다시 확인
+setInterval(loadWeather, 20 * 60 * 1000);
 updatePadding();
 resetClock();
 renderToday();

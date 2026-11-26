@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#fff6ec">
+  <meta id="theme-color" name="theme-color" content="#fff6ec">
   <title>걸음모도로</title>
   <!-- 휴대폰 홈 화면에 앱처럼 추가하기 위한 설정 -->
   <link rel="manifest" href="/static/manifest.webmanifest">
@@ -18,13 +18,15 @@
 </head>
 <body class="view-focus">
   <div id="map"></div>
+  <div class="tint" aria-hidden="true"></div>
   <div class="veil" aria-hidden="true"></div>
+  <canvas id="weather-fx" aria-hidden="true"></canvas>
 
   <header class="topbar">
     <p class="brand">걸음모도로</p>
     <div class="top-actions">
-      <button id="btn-coins" class="coin-pill" aria-label="발자국 코인, 아바타 꾸미기">🐾 <span id="coin-count">0</span></button>
-      <button id="btn-view" class="icon-btn" aria-label="지도 크게 보기">🗺️</button>
+      <button id="weather-chip" class="weather-chip" hidden></button>
+      <button id="btn-coins" class="coin-pill" aria-label="발자국 코인, 꾸미기">🐾 <span id="coin-count">0</span></button>
       <button id="btn-settings" class="icon-btn" aria-label="설정">⚙️</button>
     </div>
   </header>
@@ -47,7 +49,10 @@
       <div id="hero-avatar" class="avatar"></div>
     </div>
 
-    <div id="clock" class="clock">25:00</div>
+    <button id="clock-btn" class="clock-btn" aria-label="집중 시간 바꾸기">
+      <span id="clock" class="clock">25:00</span>
+      <span class="clock-edit" aria-hidden="true">✎</span>
+    </button>
     <p id="clock-sub" class="clock-sub">집중 준비</p>
 
     <div id="minute-chips" class="segmented" role="radiogroup" aria-label="집중 시간">
@@ -72,32 +77,30 @@
         <p id="journey-mode" class="eyebrow"></p>
         <p class="journey-title">🏁 <span id="journey-name">목적지 없음</span></p>
       </div>
-      <button id="btn-back" class="pill">돌아가기</button>
     </div>
     <div class="progress"><div id="journey-bar" class="progress-bar"></div></div>
     <div class="map-card-foot">
       <p id="journey-text" class="muted small"></p>
-      <div class="foot-actions">
-        <button id="btn-street" class="pill street-btn" aria-pressed="false">🚶 거리 시점</button>
-        <button id="btn-overview" class="text-btn small">전체 경로</button>
-      </div>
+      <button id="btn-overview" class="text-btn small">전체 경로</button>
     </div>
   </section>
 
-  <!-- 설정 -->
-  <div id="settings-modal" class="modal" hidden>
+  <!-- 아래 탭: 자주 쓰는 화면을 한 번에 -->
+  <nav class="tabbar" aria-label="화면 바꾸기">
+    <button class="tab" data-tab="focus"><span class="tab-icon">⏱️</span><span>집중</span></button>
+    <button class="tab" data-tab="map"><span class="tab-icon">🗺️</span><span>지도</span></button>
+    <button class="tab" data-tab="street"><span class="tab-icon">🚶</span><span>거리 걷기</span></button>
+    <button class="tab" data-tab="closet"><span class="tab-icon">👕</span><span>꾸미기</span></button>
+  </nav>
+
+  <!-- 꾸미기 -->
+  <div id="closet-modal" class="modal" hidden>
     <div class="modal-card">
       <div class="handle"></div>
       <div class="modal-head">
-        <p class="modal-title">설정</p>
-        <button class="close" data-close="settings-modal" aria-label="닫기">✕</button>
+        <p class="modal-title">꾸미기</p>
+        <button class="close" data-close="closet-modal" aria-label="닫기">✕</button>
       </div>
-
-      <div id="account" class="account" hidden></div>
-
-      <p class="section-title">같이 걷는 친구</p>
-      <div id="char-grid" class="char-grid"></div>
-
       <div id="closet" class="closet">
         <div class="closet-head">
           <div id="closet-preview" class="avatar small"></div>
@@ -111,6 +114,22 @@
         <div id="palette" class="palette" hidden></div>
         <div id="item-grid" class="item-grid"></div>
       </div>
+
+      <p class="section-title">같이 걷는 친구</p>
+      <div id="char-grid" class="char-grid"></div>
+    </div>
+  </div>
+
+  <!-- 설정 -->
+  <div id="settings-modal" class="modal" hidden>
+    <div class="modal-card">
+      <div class="handle"></div>
+      <div class="modal-head">
+        <p class="modal-title">설정</p>
+        <button class="close" data-close="settings-modal" aria-label="닫기">✕</button>
+      </div>
+
+      <div id="account" class="account" hidden></div>
 
       <p class="section-title">지도 모양</p>
       <div id="style-options" class="segmented wide"></div>
