@@ -46,6 +46,21 @@ uv run uvicorn app.main:app --reload
 
 25분을 기다리기 힘들면 <http://localhost:8000/?fast=1> 로 열어 보세요. 1분이 1초로 줄어들어요(테스트용).
 
+## 휴대폰에서 쓰기 (배포)
+
+[Render](https://render.com) 무료 플랜에 올리는 설정(`render.yaml`, `Dockerfile`)이 들어 있어요. 한 번만 따라 하면 이후엔 main에 합칠 때마다 자동으로 다시 배포돼요.
+
+1. render.com 에서 **GitHub 계정으로 가입**해요.
+2. 대시보드에서 **New → Blueprint** 를 누르고, GitHub 연결 화면에서 `walkmodoro` 저장소 접근을 허용한 뒤 고르세요.
+3. `ORS_API_KEY` 입력 칸이 나오면 키를 넣거나, 없으면 비워 두세요(데모 지도로 동작). 나중에 서비스의 Environment 메뉴에서 넣어도 돼요.
+4. **Deploy Blueprint** 를 누르고 몇 분 기다리면 `https://walkmodoro-xxxx.onrender.com` 같은 주소가 생겨요.
+5. 휴대폰 브라우저로 그 주소를 열고 위치 권한을 허용하세요.
+6. 앱처럼 쓰려면 홈 화면에 추가하세요.
+   - 아이폰(Safari): 공유 버튼 → **홈 화면에 추가**
+   - 안드로이드(Chrome): 오른쪽 위 ⋮ → **홈 화면에 추가** (또는 앱 설치)
+
+알아둘 점: 무료 플랜은 한동안(약 15분) 아무도 안 쓰면 서버가 잠들어서, 그다음 첫 접속은 1분 가까이 걸릴 수 있어요. 매달 비용을 내는 유료 플랜으로 바꾸면 사라져요.
+
 ## 검사하기
 
 ```bash
@@ -65,11 +80,13 @@ app/
   places.py      # 오늘의 여행지 고르기 (OpenStreetMap 장소 검색)
   config.py      # .env 설정 읽기
   templates/     # HTML 화면
-  static/        # 지도·타이머 JS, CSS, 지도 라이브러리(Leaflet)
+  static/        # 지도·타이머 JS, CSS, 지도 라이브러리(Leaflet), 앱 아이콘
+Dockerfile       # 서버에서 실행하는 방법
+render.yaml      # Render 배포 설정
 tests/           # 자동 테스트
 ```
 
 ## 다음 단계
 
-- 배포해서 휴대폰으로 써 보기 (지인 테스트)
+- 휴대폰으로 써 보고 지인 20명에게 공유하기 (2단계 관문)
 - 로드맵 3단계: 회원가입, 누적 지도·통계, 프리미엄 구독

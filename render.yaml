@@ -1,0 +1,13 @@
+# Render 배포 설정 (Blueprint). Render 대시보드에서 New → Blueprint 로 이 저장소를 고르면 읽혀요.
+services:
+  - type: web
+    name: walkmodoro
+    runtime: docker
+    plan: free
+    region: singapore
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # 비워 두면 데모 지도(직선 거리 원)로 동작해요. 나중에 대시보드에서 넣어도 돼요.
+      - key: ORS_API_KEY
+        sync: false

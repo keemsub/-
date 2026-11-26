@@ -1,0 +1,15 @@
+{
+  "name": "걸음모도로",
+  "short_name": "걸음모도로",
+  "description": "집중한 시간만큼, 거북이가 동네를 걸어가요",
+  "lang": "ko",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#fffaf0",
+  "theme_color": "#5fb38a",
+  "icons": [
+    { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
