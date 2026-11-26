@@ -1,0 +1,14 @@
+# 파이썬
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# 비밀값 — 절대 올리지 마세요
+.env
+
+# 기타
+.DS_Store
+.idea/
+.vscode/

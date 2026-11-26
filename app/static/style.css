@@ -1,0 +1,26 @@
+:root {
+  --bg: #fffaf0;
+  --ink: #3b3a36;
+  --accent: #5fb38a;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 16px;
+  font-family: system-ui, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+header h1 { margin: 0; font-size: 1.6rem; }
+.sub { margin: 4px 0 16px; opacity: 0.7; }
+
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+select, button { font: inherit; padding: 8px 12px; border-radius: 12px; border: 1px solid #ccc; }
+button { background: var(--accent); color: white; border: none; cursor: pointer; }
+
+.status { min-height: 1.4em; }
+
+#map { height: 70vh; border-radius: 16px; }
