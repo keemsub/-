@@ -29,6 +29,7 @@ from app.places import (
 )
 from app.trains import catalog as train_catalog
 from app.weather import OpenMeteoWeather
+from app.wiki import WikiGuide
 
 BASE_DIR = Path(__file__).parent
 
@@ -258,6 +259,27 @@ def weather(
         return source.current(lat, lon).to_dict()
     except (httpx.HTTPError, KeyError, ValueError) as exc:
         raise HTTPException(status_code=502, detail="날씨를 가져오지 못했어요.") from exc
+
+
+@lru_cache
+def get_wiki() -> WikiGuide:
+    return WikiGuide()
+
+
+@app.get("/api/place-info")
+def place_info(
+    name: Annotated[str, Query(min_length=1, max_length=80)],
+    lat: Annotated[float, Query(ge=-90, le=90)],
+    lon: Annotated[float, Query(ge=-180, le=180)],
+    guide: Annotated[WikiGuide, Depends(get_wiki)],
+    wide: bool = False,
+):
+    """도착한 곳의 사진과 짧은 소개 (위키백과). 못 찾으면 info가 null이에요."""
+    try:
+        info = guide.lookup(name, lat, lon, wide)
+    except (httpx.HTTPError, KeyError, ValueError):
+        info = None
+    return {"info": info.to_dict() if info else None}
 
 
 @app.get("/api/avatar/items")
