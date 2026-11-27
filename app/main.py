@@ -15,6 +15,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from app.auth import router as auth_router
 from app.avatar import catalog
 from app.config import get_settings
+from app.db import is_persistent
 from app.flights import catalog as flight_catalog
 from app.isochrone import CachedProvider, DemoProvider, IsochroneProvider, OrsProvider
 from app.journey import Geocoder, NominatimGeocoder, OrsRouter, OsmFootRouter, Router
@@ -125,7 +126,8 @@ def assetlinks():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    # db가 "temporary"면 Render에 DATABASE_URL이 없어서 서버가 다시 켜지면 로그인이 풀려요
+    return {"status": "ok", "db": "persistent" if is_persistent() else "temporary"}
 
 
 @app.get("/api/isochrone")

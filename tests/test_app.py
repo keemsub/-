@@ -8,7 +8,9 @@ client = TestClient(app)
 
 
 def test_health():
-    assert client.get("/health").json() == {"status": "ok"}
+    body = client.get("/health").json()
+    assert body["status"] == "ok"
+    assert body["db"] in ("persistent", "temporary")
 
 
 def test_index_page_loads():

@@ -147,3 +147,31 @@ def test_delete_account_removes_user_and_state(client):
 
 def test_delete_requires_login(client):
     assert client.delete("/api/me").status_code == 401
+
+
+def test_login_survives_and_stale_cookie_is_cleared(client):
+    login(client)
+    assert client.get("/api/me").json()["user"]["nickname"] == "걷는사람"
+
+    # 데이터베이스가 초기화된 상황: 쿠키는 남았지만 사용자가 없어요
+    from app.db import User
+
+    db = client.Session()
+    db.query(User).delete()
+    db.commit()
+    assert client.get("/api/me").json()["user"] is None
+
+    # 쿠키를 비웠으니, 나중에 다른 사람이 같은 번호로 가입해도 그 계정으로 들어가지 않아요
+    from app.db import upsert_user
+
+    upsert_user(db, "google", "other", "다른사람")
+    db.commit()
+    assert client.get("/api/me").json()["user"] is None
+
+
+def test_me_reports_whether_storage_is_persistent(client, monkeypatch):
+    from app import db as db_module
+
+    monkeypatch.setattr(db_module, "is_persistent", lambda: False)
+    monkeypatch.setattr("app.auth.is_persistent", lambda: False)
+    assert client.get("/api/me").json()["persistent"] is False
