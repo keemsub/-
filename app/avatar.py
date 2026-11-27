@@ -15,6 +15,9 @@ SLOTS = ("hair", "top", "hat", "neck", "bag", "color")
 SKIN_TONES = ["#ffe6d5", "#f7d2b4", "#e9b892", "#c98f69", "#8f5c3e"]
 HAIR_COLORS = ["#3d2c25", "#1f1b1d", "#7b4b2e", "#d6a25c", "#e5836d", "#8f7fd6", "#6fbf9a"]
 TOP_COLORS = ["#7fcfa8", "#ffb4a2", "#9cc7f0", "#f6d365", "#c3b1f0", "#fdfaf5", "#4f5d7e"]
+# True면 코인 없이 모든 아이템(특별 아이템 포함)을 입을 수 있어요.
+# 다시 잠그려면 False로 바꾸면 돼요.
+ALL_ITEMS_FREE = True
 METERS_PER_COIN = 100  # 100m 걸을 때마다 발자국 코인 1개
 ARRIVAL_BONUS = 10  # 목적지에 도착하면 보너스
 
@@ -85,6 +88,7 @@ def catalog() -> dict:
         "top_colors": TOP_COLORS,
         "meters_per_coin": METERS_PER_COIN,
         "arrival_bonus": ARRIVAL_BONUS,
+        "all_free": ALL_ITEMS_FREE,
     }
 
 

@@ -16,6 +16,18 @@ const CHARACTERS = [
   { id: "rabbit", emoji: "🐇", name: "토끼", line: "깡총깡총 가볍게" },
   { id: "hedgehog", emoji: "🦔", name: "고슴도치", line: "조용히 꾸준히" },
   { id: "duck", emoji: "🦆", name: "오리", line: "물가를 좋아해요" },
+  { id: "chick", emoji: "🐥", name: "병아리", line: "삐약삐약 졸졸 따라가요" },
+  { id: "hamster", emoji: "🐹", name: "햄스터", line: "볼 빵빵, 간식 챙겼어요" },
+  { id: "squirrel", emoji: "🐿️", name: "다람쥐", line: "도토리 찾으며 가요" },
+  { id: "fox", emoji: "🦊", name: "여우", line: "지름길을 알고 있어요" },
+  { id: "bear", emoji: "🐻", name: "곰", line: "든든하게 같이 걸어요" },
+  { id: "panda", emoji: "🐼", name: "판다", line: "대나무 숲까지 느긋하게" },
+  { id: "koala", emoji: "🐨", name: "코알라", line: "졸려도 꼭 붙어 가요" },
+  { id: "otter", emoji: "🦦", name: "수달", line: "냇가에서 쉬어 가요" },
+  { id: "sloth", emoji: "🦥", name: "나무늘보", line: "세상에서 제일 느긋하게" },
+  { id: "frog", emoji: "🐸", name: "개구리", line: "폴짝폴짝 신나게" },
+  { id: "unicorn", emoji: "🦄", name: "유니콘", line: "반짝반짝 꿈길을 걸어요" },
+  { id: "dino", emoji: "🦕", name: "공룡", line: "쿵쿵, 큰 걸음으로" },
 ];
 
 // 'cute'는 직접 만든 단순한 지도예요 (app/static/map/cute.json): 파스텔 색, 큰 길만, 도시 이름만.
@@ -1085,7 +1097,8 @@ function renderToday() {
   $("stat-sessions").textContent = `${today.sessions ?? Math.round(today.minutes / 25)}번`;
 }
 
-const hasItem = (item) => (item.price === 0 && !item.premium) || owned.includes(item.id);
+// 지금은 모든 아이템이 무료예요 (app/avatar.py의 ALL_ITEMS_FREE). 끄면 코인으로 사는 방식으로 돌아가요.
+const hasItem = (item) => CATALOG.all_free || (item.price === 0 && !item.premium) || owned.includes(item.id);
 
 // 사람 아바타(SVG)를 그리고, 같이 걷는 친구(동물)를 발치에 둬요. 크기는 글자 크기(em)를 따라가요.
 function paintFigure(el) {
@@ -1124,6 +1137,7 @@ const PALETTES = [
 
 function renderCloset() {
   $("closet-coins").textContent = coins.toLocaleString();
+  $("closet-free").hidden = !CATALOG.all_free;
   const tabs = $("slot-tabs");
   tabs.innerHTML = "";
   for (const slot of SLOTS) {

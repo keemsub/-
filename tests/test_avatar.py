@@ -62,3 +62,9 @@ def test_every_item_is_drawn_in_avatar_js():
     for item in ITEMS:
         if item.slot != "color":
             assert f'"{item.id}"' in drawing, f"{item.id} 그림이 avatar.js에 없어요"
+
+
+def test_all_items_free_flag_reaches_page():
+    from app.avatar import ALL_ITEMS_FREE, catalog
+
+    assert catalog()["all_free"] is ALL_ITEMS_FREE
