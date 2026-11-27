@@ -283,7 +283,15 @@
       <p id="done-title" class="modal-title"></p>
       <p id="done-text" class="muted"></p>
       <p id="done-coins" class="done-coins" hidden></p>
-      <a id="done-link" class="cta" target="_blank" rel="noopener" hidden>카카오맵으로 진짜 걸어가기</a>
+      <!-- 도착한 곳의 사진과 짧은 소개 (위키백과) -->
+      <div id="done-place" class="place-card" hidden>
+        <div class="place-photo"><img id="place-img" alt="" hidden><span id="place-emoji" class="place-emoji">📍</span></div>
+        <div class="place-body">
+          <p id="place-title" class="place-title"></p>
+          <p id="place-text" class="place-text"></p>
+          <a id="place-link" class="place-source" target="_blank" rel="noopener" hidden>위키백과에서 더 보기 ›</a>
+        </div>
+      </div>
       <button class="cta soft" data-close="done-modal">좋아요</button>
     </div>
   </div>

@@ -1234,6 +1234,50 @@ function chooseItem(item, mine) {
   renderCloset();
 }
 
+// ---------- 도착한 곳 소개 ----------
+// 도착하면 그곳의 사진과 짧은 소개를 보여줘요 (위키백과). 못 찾으면 귀여운 그림과 한마디만 보여줘요.
+async function showPlaceCard(place, end) {
+  const card = $("done-place");
+  card.hidden = !place;
+  if (!place) return;
+  const img = $("place-img");
+  const link = $("place-link");
+  const emoji = place.kind === "train" ? "🚉" : place.flag || "📍";
+  img.hidden = true;
+  link.hidden = true;
+  card.classList.add("loading");
+  $("place-emoji").textContent = emoji;
+  $("place-title").textContent = place.name;
+  $("place-text").textContent = "이곳의 이야기를 찾고 있어요...";
+  const wide = riding() ? "&wide=true" : "";
+  let info = null;
+  // 지도에서 직접 찍은 곳("내가 고른 곳")은 이름이 없어서 찾지 않아요
+  if (place.name !== "내가 고른 곳") {
+    try {
+      const q = `name=${encodeURIComponent(place.name)}&lat=${end[1]}&lon=${end[0]}${wide}`;
+      info = (await api(`/api/place-info?${q}`)).info;
+    } catch {
+      // 인터넷이 안 되면 그림과 한마디만 보여줘요
+    }
+  }
+  card.classList.remove("loading");
+  if (!info) {
+    const about = place.address ? `${place.address} · ` : "";
+    $("place-text").textContent = `${about}아직 사진과 소개가 없는 곳이에요. 언젠가 진짜로 와 볼까요? 🌿`;
+    return;
+  }
+  $("place-title").textContent = info.title;
+  $("place-text").textContent = info.text;
+  link.href = info.url;
+  link.hidden = false;
+  if (info.image) {
+    img.onload = () => (img.hidden = false);
+    img.onerror = () => (img.hidden = true);
+    img.src = info.image;
+    img.alt = `${info.title} 사진 (위키백과)`;
+  }
+}
+
 // 살 수 없는 아이템을 누르면 잠깐 흔들고 이유를 보여줘요.
 function flash(id, text) {
   renderCloset();
@@ -1534,9 +1578,7 @@ function finish() {
       ? `${wagwa(character.name)} 함께 ${formatDistance(journey.route.distance_m)}를 걸어왔어요. 정말 수고했어요.`
       : `${journey.name}까지 ${formatDistance(left)} 남았어요. 쉬고 나서 이어 걸어요.`;
   }
-  const link = $("done-link");
-  link.hidden = riding() || !arrived || journey.route.distance_m > 15000;
-  link.href = `https://map.kakao.com/link/to/${encodeURIComponent(journey.name)},${end[1]},${end[0]}`;
+  showPlaceCard(arrived ? journey : null, end);
 
   document.title = arrived ? "🏁 도착! · 뽀모도로" : "☕ 쉬는 시간 · 뽀모도로";
   if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
