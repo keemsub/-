@@ -66,6 +66,11 @@ def get_engine() -> Engine:
     return engine
 
 
+def is_persistent() -> bool:
+    """서버가 다시 시작돼도 기록이 남는 데이터베이스인지 (SQLite 파일은 Render에서 사라져요)."""
+    return not normalize_url(get_settings().database_url).startswith("sqlite")
+
+
 def get_db() -> Iterator[Session]:
     session = sessionmaker(bind=get_engine(), expire_on_commit=False)()
     try:

@@ -14,7 +14,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.db import User, delete_user, get_db, load_state, save_state, upsert_user
+from app.db import User, delete_user, get_db, is_persistent, load_state, save_state, upsert_user
 
 router = APIRouter()
 MAX_STATE_BYTES = 1_000_000  # 회원 한 명의 저장 상태는 1MB까지
@@ -100,7 +100,14 @@ def logout(request: Request):
 
 def get_current_user(request: Request, db: Annotated[Session, Depends(get_db)]) -> User | None:
     uid = request.session.get("uid")
-    return db.get(User, uid) if uid else None
+    if not uid:
+        return None
+    user = db.get(User, uid)
+    if user is None:
+        # 쿠키에는 로그인 기록이 있는데 데이터베이스에 그 사람이 없어요
+        # (데이터베이스가 초기화됐거나 계정을 지웠을 때). 쿠키를 비워요.
+        request.session.pop("uid", None)
+    return user
 
 
 @router.get("/api/me")
@@ -109,14 +116,22 @@ def me(
     db: Annotated[Session, Depends(get_db)],
 ):
     providers = get_settings().login_providers()
+    persistent = is_persistent()
     if user is None:
-        return {"user": None, "providers": providers, "state": None, "rev": 0}
+        return {
+            "user": None,
+            "providers": providers,
+            "state": None,
+            "rev": 0,
+            "persistent": persistent,
+        }
     state, rev = load_state(db, user.id)
     return {
         "user": {"nickname": user.nickname, "provider": user.provider},
         "providers": providers,
         "state": state,
         "rev": rev,
+        "persistent": persistent,
     }
 
 

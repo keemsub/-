@@ -1912,6 +1912,13 @@ function renderAccount() {
   intro.className = "small";
   intro.innerHTML = "<b>로그인하면</b> 휴대폰을 바꿔도 여정과 기록이 이어져요";
   box.appendChild(intro);
+  if (me.persistent === false) {
+    // 서버에 데이터베이스(DATABASE_URL)가 없으면 서버가 다시 켜질 때마다 계정이 사라져 로그인이 풀려요
+    const warn = document.createElement("p");
+    warn.className = "muted small";
+    warn.textContent = "⚠️ 서버에 데이터베이스가 연결되지 않아, 서버가 다시 켜지면 로그인이 풀려요 (Render의 DATABASE_URL 확인)";
+    box.appendChild(warn);
+  }
   for (const id of me.providers) {
     const a = document.createElement("a");
     a.className = `login-btn ${id}`;
@@ -1934,7 +1941,11 @@ async function initAccount() {
     return;
   }
   renderAccount();
-  if (!me.user) return;
+  if (!me.user) {
+    // 방금 로그인하고 돌아왔는데 서버가 모른다면: 쿠키가 저장되지 않은 거예요 (홈 화면 앱/브라우저가 다를 때 등)
+    if (loginResult === "1") $("status").textContent = "로그인이 저장되지 않았어요. 앱 대신 브라우저에서 다시 시도해 주세요.";
+    return;
+  }
   if (me.state && me.rev !== store.get("syncedRev", 0)) {
     // 다른 기기에서 저장한 최신 기록이 있으면 그걸로 바꾸고 다시 그려요.
     applyState(me.state);
