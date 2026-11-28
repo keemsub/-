@@ -6,6 +6,7 @@
   길찾기 서버가 응답하지 않으면 직선(지구 곡면 기준)으로 대신합니다.
 """
 
+import logging
 import math
 import threading
 import time
@@ -18,6 +19,10 @@ from app.places import haversine_m
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
+# Nominatim이 막히거나 느릴 때 쓰는 두 번째 검색 서버 (역시 키 없이 무료, OpenStreetMap 기반)
+PHOTON_URL = "https://photon.komoot.io/api/"
+PHOTON_REVERSE_URL = "https://photon.komoot.io/reverse"
+log = logging.getLogger("walkmodoro.search")
 # 경로 안의 driving은 이름일 뿐이고, routed-foot 서버는 항상 도보 길로 답해요.
 OSM_FOOT_URL = "https://routing.openstreetmap.de/routed-foot/route/v1/driving"
 ORS_DIRECTIONS_URL = "https://api.openrouteservice.org/v2/directions/foot-walking/geojson"
@@ -59,7 +64,7 @@ class NominatimGeocoder:
     """이용 정책: 초당 1회 이하, 앱을 알아볼 수 있는 User-Agent, 결과는 캐시."""
 
     def __init__(self, client: httpx.Client | None = None, min_interval: float = 1.0) -> None:
-        self.client = client or httpx.Client(timeout=10, headers={"User-Agent": USER_AGENT})
+        self.client = client or httpx.Client(timeout=6, headers={"User-Agent": USER_AGENT})
         self.min_interval = min_interval
         self._lock = threading.Lock()
         self._last = 0.0
@@ -104,6 +109,81 @@ class NominatimGeocoder:
             self._last = time.monotonic()
         response.raise_for_status()
         return place_name(response.json())
+
+
+class PhotonGeocoder:
+    """komoot의 Photon 검색. 한글 이름은 지역 이름(한국은 한국어)으로 나와요."""
+
+    def __init__(self, client: httpx.Client | None = None) -> None:
+        self.client = client or httpx.Client(timeout=8, headers={"User-Agent": USER_AGENT})
+
+    def search(self, query: str) -> list[SearchResult]:
+        response = self.client.get(PHOTON_URL, params={"q": query, "limit": 6})
+        response.raise_for_status()
+        return [r for r in (_photon_result(f) for f in response.json().get("features", [])) if r]
+
+    def reverse(self, lat: float, lon: float) -> str | None:
+        response = self.client.get(PHOTON_REVERSE_URL, params={"lat": lat, "lon": lon})
+        response.raise_for_status()
+        features = response.json().get("features", [])
+        return _photon_result(features[0]).name if features else None
+
+
+def _photon_result(feature: dict[str, Any]) -> SearchResult | None:
+    props = feature.get("properties", {})
+    coords = feature.get("geometry", {}).get("coordinates") or []
+    name = props.get("name") or props.get("street")
+    if not name or len(coords) < 2:
+        return None
+    parts = [props.get(k) for k in ("country", "state", "city", "district", "street")]
+    address = " ".join(dict.fromkeys(p for p in parts if p and p != name))
+    return SearchResult(name=name, address=address, lat=float(coords[1]), lon=float(coords[0]))
+
+
+class FallbackGeocoder:
+    """앞의 검색 서버가 실패하거나 결과가 없으면 다음 서버에 물어봐요."""
+
+    def __init__(self, *geocoders: Geocoder, cooldown: float = 600) -> None:
+        self.geocoders = geocoders
+        self.cooldown = cooldown  # 실패한 서버는 10분 동안 건너뛰어요 (기다리는 시간을 줄여요)
+        self._skip_until: dict[int, float] = {}
+
+    def _usable(self) -> list[Geocoder]:
+        now = time.monotonic()
+        ready = [g for i, g in enumerate(self.geocoders) if self._skip_until.get(i, 0) <= now]
+        return ready or list(self.geocoders)
+
+    def _failed(self, geocoder: Geocoder, exc: Exception, what: str) -> None:
+        log.warning("%s 실패 (%s): %r", what, type(geocoder).__name__, exc)
+        self._skip_until[self.geocoders.index(geocoder)] = time.monotonic() + self.cooldown
+
+    def search(self, query: str) -> list[SearchResult]:
+        error: httpx.HTTPError | None = None
+        answered = False
+        for geocoder in self._usable():
+            try:
+                results = geocoder.search(query)
+            except httpx.HTTPError as exc:
+                self._failed(geocoder, exc, "장소 검색")
+                error = exc
+                continue
+            answered = True
+            if results:
+                return results
+        if error and not answered:
+            raise error  # 모든 서버가 실패했을 때만 오류로 알려요
+        return []
+
+    def reverse(self, lat: float, lon: float) -> str | None:
+        for geocoder in self._usable():
+            try:
+                name = geocoder.reverse(lat, lon)
+            except httpx.HTTPError as exc:
+                self._failed(geocoder, exc, "위치 이름 찾기")
+                continue
+            if name:
+                return name
+        return None
 
 
 def place_name(data: dict) -> str | None:

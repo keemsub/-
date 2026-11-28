@@ -1338,7 +1338,12 @@ async function searchPlaces(event) {
   if (!q) return;
   list.innerHTML = '<li class="muted small">찾는 중...</li>';
   try {
-    const { results } = await api(`/api/search?q=${encodeURIComponent(q)}`);
+    let results;
+    try {
+      ({ results } = await api(`/api/search?q=${encodeURIComponent(q)}`));
+    } catch {
+      results = await searchFromPhone(q); // 서버 검색이 막히면 휴대폰에서 바로 찾아요
+    }
     list.innerHTML = results.length ? "" : '<li class="muted small">검색 결과가 없어요. 다른 이름으로 찾아볼까요?</li>';
     for (const r of results) {
       const li = document.createElement("li");
@@ -1368,6 +1373,21 @@ function prefetchAttraction() {
 }
 
 const pickIsFresh = () => nextPick && nextPick.km === randomKm && Date.now() - nextPick.at < 5 * 60 * 1000;
+
+// 서버가 검색 서버에 닿지 못할 때를 위한 예비 길: 브라우저가 Photon(무료 지도 검색)에 직접 물어봐요.
+async function searchFromPhone(q) {
+  const pos = store.get("lastPos", null);
+  const near = pos ? `&lat=${pos.lat}&lon=${pos.lon}` : "";
+  const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=6${near}`);
+  if (!res.ok) throw new Error("photon");
+  return (await res.json()).features
+    .filter((f) => f.properties?.name)
+    .map((f) => {
+      const p = f.properties;
+      const address = [p.country, p.state, p.city, p.district, p.street].filter((x) => x && x !== p.name);
+      return { name: p.name, address: [...new Set(address)].join(" "), lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0] };
+    });
+}
 
 async function randomDestination() {
   closeModal("dest-modal");

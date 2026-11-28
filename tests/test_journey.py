@@ -164,3 +164,91 @@ def test_route_endpoint_without_key_is_straight():
 
 def test_config_endpoint():
     assert client.get("/api/config").json()["walking_speed_kmh"] > 0
+
+
+# ---------- 검색 서버가 막힐 때: Photon으로 대신 ----------
+from app.journey import FallbackGeocoder, PhotonGeocoder  # noqa: E402
+
+PHOTON_HIT = {
+    "features": [
+        {
+            "geometry": {"coordinates": [126.977, 37.579]},
+            "properties": {
+                "name": "경복궁",
+                "country": "대한민국",
+                "city": "서울",
+                "district": "종로구",
+            },
+        },
+        {"geometry": {"coordinates": [1, 2]}, "properties": {}},
+    ]
+}
+
+
+def _blocked(request):
+    return httpx.Response(403, text="Access blocked")
+
+
+def _photon(request):
+    assert request.url.host == "photon.komoot.io"
+    if request.url.path == "/reverse":
+        return httpx.Response(200, json=PHOTON_HIT)
+    return httpx.Response(200, json=PHOTON_HIT)
+
+
+def _geocoders(first_handler):
+    first = NominatimGeocoder(
+        client=httpx.Client(transport=httpx.MockTransport(first_handler)), min_interval=0
+    )
+    second = PhotonGeocoder(client=httpx.Client(transport=httpx.MockTransport(_photon)))
+    return first, second
+
+
+def test_photon_parses_results():
+    _, photon = _geocoders(_blocked)
+    results = photon.search("경복궁")
+    assert len(results) == 1
+    assert results[0].name == "경복궁"
+    assert results[0].lat == 37.579 and results[0].lon == 126.977
+    assert "종로구" in results[0].address
+
+
+def test_falls_back_when_nominatim_is_blocked():
+    calls = {"n": 0}
+
+    def blocked(request):
+        calls["n"] += 1
+        return httpx.Response(403, text="Access blocked")
+
+    geocoder = FallbackGeocoder(*_geocoders(blocked))
+    assert geocoder.search("경복궁")[0].name == "경복궁"
+    assert geocoder.reverse(37.579, 126.977) == "경복궁"
+    # 막힌 서버는 잠시 건너뛰어서 기다리지 않아요
+    geocoder.search("남산")
+    assert calls["n"] == 1
+
+
+def test_raises_only_when_every_server_fails():
+    def down(request):
+        raise httpx.ConnectError("down")
+
+    first = NominatimGeocoder(
+        client=httpx.Client(transport=httpx.MockTransport(down)), min_interval=0
+    )
+    second = PhotonGeocoder(client=httpx.Client(transport=httpx.MockTransport(down)))
+    geocoder = FallbackGeocoder(first, second)
+    try:
+        geocoder.search("어디")
+    except httpx.HTTPError:
+        pass
+    else:
+        raise AssertionError("모두 실패하면 오류여야 해요")
+    assert geocoder.reverse(1, 2) is None
+
+
+def test_empty_answer_from_first_server_asks_the_next():
+    def empty(request):
+        return httpx.Response(200, json=[])
+
+    geocoder = FallbackGeocoder(*_geocoders(empty))
+    assert geocoder.search("경복궁")[0].name == "경복궁"
