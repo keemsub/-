@@ -620,13 +620,16 @@ button { cursor: pointer; border: none; background: none; }
 /* 작은 화면에서는 더 촘촘하게 */
 @media (max-height: 720px) {
   .hero { gap: 10px; padding-top: calc(64px + var(--safe-top)); }
-  .mode-card { padding: 7px 6px; flex-direction: row; justify-content: center; gap: 6px; }
-  .mode-icon { font-size: 22px; }
+  .mode-card { padding: 7px 4px; flex-direction: row; justify-content: center; gap: 4px; min-width: 0; }
+  .mode-icon { font-size: 20px; }
+  .mode-text { min-width: 0; }
+  .mode-text b { font-size: 0.82rem; }
   .mode-text small { display: none; }
 }
 @media (max-width: 360px) {
   .mode-text small { display: none; }
-  .mode-cards { gap: 8px; }
+  .mode-cards { gap: 6px; }
+  .mode-text b { font-size: 0.8rem; }
 }
 .hero > * { flex-shrink: 0; }
 /* 빈 칸이 있으면 가운데로, 넘치면 위에서부터 (오래된 휴대폰에서도 동작) */
