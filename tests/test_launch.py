@@ -100,3 +100,25 @@ def test_client_error_is_logged(caplog):
         res = client.post("/api/client-error", content="boom @ app.js:12")
     assert res.status_code == 204
     assert "boom @ app.js:12" in caplog.text
+
+
+def _moved(monkeypatch, url="https://pomotrip.onrender.com"):
+    import app.main as main
+
+    monkeypatch.setattr(main, "get_settings", lambda: Settings(moved_to=url))
+
+
+def test_moved_server_sends_visitors_to_new_address(monkeypatch):
+    _moved(monkeypatch)
+    res = client.get("/privacy?x=1", follow_redirects=False)
+    assert res.status_code == 301
+    assert res.headers["location"] == "https://pomotrip.onrender.com/privacy?x=1"
+    home = client.get("/")
+    assert "이사했어요" in home.text
+    assert '"https://pomotrip.onrender.com"' in home.text  # 기기 기록을 챙겨 가는 스크립트
+    assert client.get("/health").json()["status"] == "ok"  # Render 상태 확인은 그대로
+
+
+def test_moved_needs_https_address(monkeypatch):
+    _moved(monkeypatch, "javascript:alert(1)")
+    assert "이사했어요" not in client.get("/").text

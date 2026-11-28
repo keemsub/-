@@ -318,6 +318,28 @@
   <script id="flight-catalog" type="application/json">{{ flights | tojson }}</script>
   <script id="train-catalog" type="application/json">{{ trains | tojson }}</script>
   <script>
+    // 예전 주소(walkmodoro.onrender.com)에서 이사 온 경우: 그 기기에 있던 기록을 넣어 줘요.
+    // 예전 주소에서 넘어왔을 때만 받고, 이 주소에 이미 있는 값은 덮어쓰지 않아요.
+    (() => {
+      const OLD = "https://walkmodoro.onrender.com";
+      const moved = location.hash;
+      if (!moved.startsWith("#move=")) return;
+      history.replaceState(null, "", location.pathname + location.search);
+      if (!document.referrer.startsWith(OLD)) return;
+      try {
+        const b64 = moved.slice(6).replace(/-/g, "+").replace(/_/g, "/");
+        const bin = atob(b64);
+        const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
+        const data = JSON.parse(new TextDecoder().decode(bytes));
+        for (const [key, value] of Object.entries(data)) {
+          if (key.startsWith("walkmodoro:") && typeof value === "string" && localStorage.getItem(key) === null) {
+            localStorage.setItem(key, value);
+          }
+        }
+      } catch {}
+    })();
+  </script>
+  <script>
     // 화면 오류를 서버 기록(Render Logs)으로 보내요. 한 번 열 때 최대 5개, 개인 정보는 안 보내요.
     (() => {
       let sent = 0;
