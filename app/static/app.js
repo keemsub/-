@@ -835,7 +835,7 @@ function onModeTap(mode) {
 
 // ---------- 🎧 배경 소리 ----------
 let soundId = store.get("sound", null);
-let soundVolume = store.get("soundVolume", 0.6);
+let soundVolume = store.get("soundVolume", 0.4);
 Sound.setVolume(soundVolume);
 
 function renderSound() {

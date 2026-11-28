@@ -13,15 +13,30 @@ const Sound = (() => {
   let ctx = null;
   let master = null;
   let current = null; // { id, stop() }
-  let volume = 0.6;
+  let volume = 0.4;
+  // 모든 소리를 한 번 더 부드럽게: 전체 크기를 낮추고(TRIM), 귀에 거슬리는 높은 소리를 깎아요(SOFT_HZ).
+  const TRIM = 0.5;
+  const SOFT_HZ = 3200;
   const buffers = {};
 
   function audio() {
     if (!ctx) {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
       master = ctx.createGain();
-      master.gain.value = volume;
-      master.connect(ctx.destination);
+      master.gain.value = volume * TRIM;
+      const soft = ctx.createBiquadFilter();
+      soft.type = "lowpass";
+      soft.frequency.value = SOFT_HZ;
+      soft.Q.value = 0.5;
+      // 갑자기 큰 소리가 나도 부드럽게 눌러 줘요
+      const limiter = ctx.createDynamicsCompressor();
+      limiter.threshold.value = -24;
+      limiter.ratio.value = 6;
+      limiter.attack.value = 0.01;
+      limiter.release.value = 0.3;
+      master.connect(soft);
+      soft.connect(limiter);
+      limiter.connect(ctx.destination);
     }
     if (ctx.state === "suspended") ctx.resume();
     return ctx;
@@ -122,7 +137,7 @@ const Sound = (() => {
 
   // 짹짹: 높은 음이 빠르게 오르내리는 짧은 소리 몇 번
   function chirp(out) {
-    const base = 2600 + Math.random() * 1600;
+    const base = 2000 + Math.random() * 1000;
     const n = 2 + Math.floor(Math.random() * 4);
     let t = ctx.currentTime + 0.02;
     for (let i = 0; i < n; i++) {
@@ -133,7 +148,7 @@ const Sound = (() => {
       osc.frequency.exponentialRampToValueAtTime(base * 1.35, t + 0.05);
       osc.frequency.exponentialRampToValueAtTime(base * 0.9, t + 0.09);
       g.gain.setValueAtTime(0, t);
-      g.gain.linearRampToValueAtTime(0.05, t + 0.01);
+      g.gain.linearRampToValueAtTime(0.018, t + 0.015);
       g.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
       osc.connect(g);
       g.connect(out);
@@ -145,46 +160,51 @@ const Sound = (() => {
 
   const BUILDERS = {
     white(out) {
-      const a = bed("pink", [["lowpass", 6000]], 0.55, out);
+      // 쏴아 대신 '후웅' 하는 낮고 포근한 잡음
+      const a = bed("pink", [["lowpass", 1600]], 0.4, out);
       return [() => a.src.stop()];
     },
     rain(out) {
-      const hiss = bed("white", [["highpass", 500], ["lowpass", 7000]], 0.6, out);
-      const rumble = bed("brown", [["lowpass", 400]], 0.6, out);
-      const swell = lfo(hiss.gain.gain, 0.07, 0.15);
+      // 창밖에 내리는 잔잔한 비: 쏴아 소리는 줄이고 빗방울은 작고 드문드문
+      const hiss = bed("pink", [["highpass", 300], ["lowpass", 2400]], 0.3, out);
+      const rumble = bed("brown", [["lowpass", 300]], 0.35, out);
+      const swell = lfo(hiss.gain.gain, 0.05, 0.08);
       const stopDrops = sprinkle(
-        () => burst(out, { type: "bandpass", freq: 1800 + Math.random() * 3500, q: 2, peak: 0.08 + Math.random() * 0.12, length: 0.03 }),
-        15,
-        70,
+        () => burst(out, { type: "bandpass", freq: 1200 + Math.random() * 1600, q: 3, peak: 0.015 + Math.random() * 0.03, length: 0.025 }),
+        40,
+        180,
       );
       return [() => hiss.src.stop(), () => rumble.src.stop(), () => swell.stop(), stopDrops];
     },
     fire(out) {
-      const roar = bed("brown", [["lowpass", 600]], 1.4, out);
-      const flicker = lfo(roar.gain.gain, 0.4, 0.4);
+      // 멀리서 타닥타닥: 웅웅거림과 '딱' 소리를 크게 줄였어요
+      const roar = bed("brown", [["lowpass", 450]], 0.6, out);
+      const flicker = lfo(roar.gain.gain, 0.25, 0.15);
       const stopCrackle = sprinkle(
-        () => burst(out, { type: "highpass", freq: 1500 + Math.random() * 2500, peak: 0.2 + Math.random() * 0.45, length: 0.008 + Math.random() * 0.03 }),
-        40,
-        320,
+        () => burst(out, { type: "bandpass", freq: 1200 + Math.random() * 1300, q: 1.5, peak: 0.04 + Math.random() * 0.08, length: 0.008 + Math.random() * 0.02 }),
+        90,
+        500,
       );
       const stopPop = sprinkle(
-        () => burst(out, { type: "bandpass", freq: 300 + Math.random() * 500, q: 1.5, peak: 0.7, length: 0.06 }),
-        1500,
-        5000,
+        () => burst(out, { type: "bandpass", freq: 300 + Math.random() * 300, q: 1.5, peak: 0.14, length: 0.05 }),
+        3000,
+        8000,
       );
       return [() => roar.src.stop(), () => flicker.stop(), stopCrackle, stopPop];
     },
     waves(out) {
-      const sea = bed("pink", [["lowpass", 1100]], 0.45, out);
-      const surge = lfo(sea.gain.gain, 1 / 9, 0.38); // 9초마다 밀려왔다 빠져요
-      const foam = bed("white", [["highpass", 2500]], 0.04, out);
-      const foamSurge = lfo(foam.gain.gain, 1 / 9, 0.035);
+      // 먼바다의 느린 파도: 더 낮고, 더 천천히(11초), 철썩임은 살짝만
+      const sea = bed("pink", [["lowpass", 700]], 0.3, out);
+      const surge = lfo(sea.gain.gain, 1 / 11, 0.2);
+      const foam = bed("pink", [["bandpass", 1400, 0.7]], 0.04, out);
+      const foamSurge = lfo(foam.gain.gain, 1 / 11, 0.03);
       return [() => sea.src.stop(), () => surge.stop(), () => foam.src.stop(), () => foamSurge.stop()];
     },
     forest(out) {
-      const wind = bed("pink", [["bandpass", 500, 0.6]], 0.5, out);
-      const breeze = lfo(wind.gain.gain, 1 / 7, 0.25);
-      const stopBirds = sprinkle(() => chirp(out), 1200, 4500);
+      // 바람은 살랑, 새는 멀리서 가끔
+      const wind = bed("pink", [["bandpass", 450, 0.6]], 0.3, out);
+      const breeze = lfo(wind.gain.gain, 1 / 8, 0.12);
+      const stopBirds = sprinkle(() => chirp(out), 2500, 7000);
       return [() => wind.src.stop(), () => breeze.stop(), stopBirds];
     },
   };
@@ -196,7 +216,7 @@ const Sound = (() => {
     // 소리마다 따로 볼륨 통로를 만들어 부드럽게 켜고 꺼요
     const out = ctx.createGain();
     out.gain.setValueAtTime(0, ctx.currentTime);
-    out.gain.linearRampToValueAtTime(1, ctx.currentTime + 1.2);
+    out.gain.linearRampToValueAtTime(1, ctx.currentTime + 3); // 3초 동안 천천히 커져요
     out.connect(master);
     const stops = BUILDERS[id](out);
     current = {
@@ -227,7 +247,7 @@ const Sound = (() => {
 
   function setVolume(v) {
     volume = v;
-    if (master) master.gain.setTargetAtTime(v, ctx.currentTime, 0.05);
+    if (master) master.gain.setTargetAtTime(v * TRIM, ctx.currentTime, 0.05);
   }
 
   return { SOUNDS, play, stop, setVolume, playing: () => current?.id ?? null };
