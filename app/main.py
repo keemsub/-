@@ -1,5 +1,7 @@
 """서버의 시작점. `uv run uvicorn app.main:app --reload` 로 실행합니다."""
 
+import logging
+import re
 import time
 from functools import lru_cache
 from pathlib import Path
@@ -7,7 +9,7 @@ from typing import Annotated
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -40,6 +42,7 @@ from app.weather import OpenMeteoWeather
 from app.wiki import WikiGuide
 
 BASE_DIR = Path(__file__).parent
+log = logging.getLogger("pomotrip")
 
 app = FastAPI(title="Pomotrip")
 settings = get_settings()
@@ -80,13 +83,45 @@ def get_router() -> Router:
     return OrsRouter(settings.ors_api_key) if settings.ors_api_key else OsmFootRouter()
 
 
+def site_url(request: Request) -> str:
+    """검색엔진·미리보기 카드에 쓸 사이트 대표 주소 (끝의 / 없이)."""
+    return (get_settings().site_url or str(request.base_url)).rstrip("/")
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
+    settings = get_settings()
+    goatcounter = settings.goatcounter_code
     return templates.TemplateResponse(
         request,
         "index.html",
-        {"avatar": catalog(), "flights": flight_catalog(), "trains": train_catalog()},
+        {
+            "avatar": catalog(),
+            "flights": flight_catalog(),
+            "trains": train_catalog(),
+            "site_url": site_url(request),
+            "goatcounter": goatcounter if re.fullmatch(r"[a-z0-9-]+", goatcounter) else "",
+            "google_verify": settings.google_site_verification,
+            "naver_verify": settings.naver_site_verification,
+        },
     )
+
+
+@app.get("/robots.txt", response_class=PlainTextResponse)
+def robots(request: Request):
+    rules = "User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /auth/\n"
+    return f"{rules}\nSitemap: {site_url(request)}/sitemap.xml\n"
+
+
+@app.get("/sitemap.xml")
+def sitemap(request: Request):
+    base = site_url(request)
+    urls = "".join(f"<url><loc>{base}{path}</loc></url>" for path in ("/", "/privacy", "/terms"))
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>'
+    )
+    return Response(xml, media_type="application/xml")
 
 
 @app.get("/privacy", response_class=HTMLResponse)
@@ -100,7 +135,12 @@ def terms(request: Request):
 
 
 def _legal_context() -> dict:
-    return {"contact_email": get_settings().contact_email, "updated": "2026년 11월 26일"}
+    settings = get_settings()
+    return {
+        "contact_email": settings.contact_email,
+        "analytics": bool(settings.goatcounter_code),
+        "updated": "2026년 11월 28일",
+    }
 
 
 @app.get("/sw.js")
@@ -133,10 +173,27 @@ def assetlinks():
     ]
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health():
+    # 무료 서버가 잠들지 않게 UptimeRobot이 5분마다 여기를 불러요 (HEAD 요청도 받아요)
     # db가 "temporary"면 Render에 DATABASE_URL이 없어서 서버가 다시 켜지면 로그인이 풀려요
     return {"status": "ok", "db": "persistent" if is_persistent() else "temporary"}
+
+
+_error_times: list[float] = []
+
+
+@app.post("/api/client-error", status_code=204)
+async def client_error(request: Request):
+    """휴대폰 화면에서 난 오류를 Render 로그(Logs 탭)에 남겨요. 개인 정보는 받지 않아요."""
+    now = time.monotonic()
+    _error_times[:] = [t for t in _error_times if now - t < 60]
+    if len(_error_times) >= 30:  # 1분에 30개까지만 (로그가 넘치지 않게)
+        return Response(status_code=204)
+    _error_times.append(now)
+    body = (await request.body())[:2000].decode("utf-8", "replace")
+    log.warning("client error: %s", body.replace("\n", " | "))
+    return Response(status_code=204)
 
 
 @app.get("/api/isochrone")
