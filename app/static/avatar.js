@@ -1,6 +1,6 @@
 // Pomotrip 아바타 그리기: 둥근 머리의 귀여운 사람 캐릭터를 SVG로 그려요.
 // 모든 모양은 이 파일에서 직접 그린 독자 디자인이에요.
-// 사용법: Avatar.svg({ skin, hairColor, topColor, hair, top, hat, neck, bag })
+// 사용법: Avatar.svg({ skin, hairColor, topColor, hair, top, hat, face, neck, bag })
 (function () {
   const INK = "#3a2e2a";
   let uid = 0;
@@ -54,6 +54,20 @@
       front: (c) =>
         `<path fill="${c}" d="M25 56 C25 29 43 18 60 18 C77 18 95 29 95 56 C88 45 76 41 60 41 C44 41 32 45 25 56Z"/><path stroke="${shade(c, -0.25)}" stroke-width="1.5" fill="none" d="M60 19 L60 30"/>`,
     },
+    "hair-pony": {
+      back: (c) =>
+        `<path fill="${c}" d="M78 28 Q110 30 106 68 Q104 90 94 100 Q98 78 92 62 Q88 48 76 40Z"/><circle cx="84" cy="31" r="4.5" fill="#ff8fb1"/>`,
+      front: (c) =>
+        `<path fill="${c}" d="M25 56 C25 29 43 18 60 18 C77 18 95 29 95 56 C88 45 76 41 60 41 C44 41 32 45 25 56Z"/>`,
+    },
+    "hair-braids": {
+      back: (c) =>
+        `<g fill="${c}">${[68, 78, 88, 98].map((y) => `<ellipse cx="24" cy="${y}" rx="6.5" ry="6"/><ellipse cx="96" cy="${y}" rx="6.5" ry="6"/>`).join("")}</g>` +
+        `<g fill="#f6d365"><circle cx="24" cy="105" r="3.5"/><circle cx="96" cy="105" r="3.5"/></g>` +
+        `<g fill="${c}"><path d="M20 107 L24 116 L28 107Z"/><path d="M92 107 L96 116 L100 107Z"/></g>`,
+      front: (c) =>
+        `<path fill="${c}" d="M25 56 C25 29 43 18 60 18 C77 18 95 29 95 56 C88 45 76 41 60 41 C44 41 32 45 25 56Z"/><path stroke="${shade(c, -0.25)}" stroke-width="1.5" fill="none" d="M60 19 L60 30"/>`,
+    },
   };
 
   // ---------- 옷 ----------
@@ -98,6 +112,31 @@
       legs("#4f5d7e") +
       arms(c, skin) +
       `<path fill="${c}" d="${TORSO}"/><path fill="#f5c542" d="M54 93 L60 99 L66 93 L60 96Z"/>`,
+    "top-sweater": (c, skin) =>
+      legs("#6d6a86") +
+      arms(c, skin) +
+      `<path fill="${c}" d="${TORSO}"/><rect x="40" y="123" width="40" height="6" rx="3" fill="${shade(c, -0.1)}"/>` +
+      `<g stroke="${shade(c, -0.12)}" stroke-width="2" fill="none"><path d="M52 98 q3 4 0 8 q-3 4 0 8 q3 4 0 7"/><path d="M68 98 q-3 4 0 8 q3 4 0 8 q-3 4 0 7"/><path d="M60 100 V122" stroke-dasharray="2 3"/></g>` +
+      `<path d="M50 92 Q60 99 70 92" stroke="${shade(c, -0.2)}" stroke-width="3.5" fill="none" stroke-linecap="round"/>`,
+    "top-sailor": (c, skin) =>
+      legs("#4f5d7e") +
+      arms("#fdfaf5", skin) +
+      `<path fill="#fdfaf5" d="${TORSO}"/><path fill="${c}" d="M44 92 L60 108 L76 92 L80 101 L60 113 L40 101Z"/>` +
+      `<path d="M44 96 L60 111 L76 96" stroke="#fffaf2" stroke-width="1.2" fill="none"/>` +
+      `<path fill="#e5566e" d="M60 111 L53 106 L53 116Z M60 111 L67 106 L67 116Z"/><circle cx="60" cy="111" r="2.4" fill="#c9485b"/>`,
+    "top-puffer": (c, skin) =>
+      legs("#6d6a86") +
+      arms(c, skin) +
+      `<path fill="${c}" d="M37 104 Q37 88 60 88 Q83 88 83 104 L85 126 Q85 132 79 132 L41 132 Q35 132 35 126Z"/>` +
+      `<g stroke="${shade(c, -0.14)}" stroke-width="1.6" fill="none" stroke-linecap="round"><path d="M37 101 Q60 105 83 101"/><path d="M36 112 Q60 116 84 112"/><path d="M35 123 Q60 127 85 123"/></g>` +
+      `<path d="M60 90 V132" stroke="${shade(c, -0.25)}" stroke-width="1.4"/><path fill="${shade(c, -0.08)}" d="M46 90 Q60 84 74 90 L72 96 Q60 92 48 96Z"/>`,
+    "top-hanbok": (c, skin) =>
+      legs(skin) +
+      `<path fill="#ff9fb8" d="M44 106 Q60 101 76 106 L88 138 Q60 144 32 138Z"/><path d="M36 128 Q60 133 84 128" stroke="#f2849f" stroke-width="1.4" fill="none"/>` +
+      arms(c, skin) +
+      `<path fill="${c}" d="M43 104 Q43 91 60 91 Q77 91 77 104 L77 111 Q60 115 43 111Z"/>` +
+      `<path d="M52 92 L60 104 L68 92" stroke="#fffaf2" stroke-width="3" fill="none" stroke-linejoin="round"/>` +
+      `<path fill="#e5566e" d="M60 104 L55 122 L58 122 L61 105Z"/><path fill="#e5566e" d="M60 104 L66 120 L63 121 L59 105Z"/><ellipse cx="60" cy="104.5" rx="3.5" ry="2.5" fill="#c9485b"/>`,
   };
 
   // 우비는 모자(후드)가 머리 뒤로 보여요
@@ -115,6 +154,21 @@
     "hat-grad": `<rect x="40" y="22" width="40" height="13" rx="3" fill="#34323d"/><path fill="#45424f" d="M60 9 L101 21 L60 33 L19 21Z"/><path d="M60 21 L92 27 L92 40" stroke="#f5c542" stroke-width="1.8" fill="none"/><circle cx="92" cy="41" r="2.6" fill="#f5c542"/>`,
     "hat-top": `<ellipse cx="60" cy="33" rx="32" ry="6" fill="#34323d"/><rect x="41" y="3" width="38" height="31" rx="4" fill="#3d3a47"/><rect x="41" y="24" width="38" height="6" fill="#c9485b"/>`,
     "hat-crown": `<path fill="#f5c542" stroke="#d9a62b" stroke-width="1.4" d="M37 32 L36 12 L48 22 L60 6 L72 22 L84 12 L83 32Z"/><circle cx="60" cy="24" r="3" fill="#e5566e"/><circle cx="46" cy="27" r="2" fill="#6aa7e0"/><circle cx="74" cy="27" r="2" fill="#6fbf9a"/>`,
+    "hat-beanie": `<path fill="#e8685a" d="M25 46 C25 12 95 12 95 46Z"/><g stroke="#d4554a" stroke-width="1.4"><path d="M40 22 V44"/><path d="M50 17 V44"/><path d="M60 15 V44"/><path d="M70 17 V44"/><path d="M80 22 V44"/></g><rect x="23" y="40" width="74" height="11" rx="5.5" fill="#d4554a"/><circle cx="60" cy="13" r="7" fill="#fffaf2"/>`,
+    "hat-bucket": `<path fill="#f6d365" d="M33 38 C33 13 87 13 87 38Z"/><path fill="#ecc24f" d="M21 43 Q60 29 99 43 Q100 50 92 49 Q60 39 28 49 Q20 50 21 43Z"/><path d="M34 34 Q60 28 86 34" stroke="#d9a62b" stroke-width="1.2" stroke-dasharray="2.5 2" fill="none"/>`,
+    "hat-bunny": `<g fill="#fffaf2" stroke="#eadfd6" stroke-width="1.2"><ellipse cx="45" cy="14" rx="7" ry="14" transform="rotate(-14 45 14)"/><ellipse cx="75" cy="14" rx="7" ry="14" transform="rotate(14 75 14)"/></g><g fill="#ffc2d1"><ellipse cx="45" cy="15" rx="3.2" ry="9" transform="rotate(-14 45 15)"/><ellipse cx="75" cy="15" rx="3.2" ry="9" transform="rotate(14 75 15)"/></g><path d="M28 38 Q60 16 92 38" stroke="#ff8fb1" stroke-width="4" fill="none" stroke-linecap="round"/>`,
+    "hat-headphones": `<path d="M25 60 Q24 17 60 17 Q96 17 95 60" stroke="#6d6a86" stroke-width="5" fill="none" stroke-linecap="round"/><rect x="16" y="50" width="14" height="22" rx="7" fill="#9cc7f0"/><rect x="90" y="50" width="14" height="22" rx="7" fill="#9cc7f0"/><rect x="21" y="53" width="7" height="16" rx="3.5" fill="#7fb0e0"/><rect x="92" y="53" width="7" height="16" rx="3.5" fill="#7fb0e0"/>`,
+    "hat-leaf": `<path d="M60 27 Q59 19 60 13" stroke="#5aa54a" stroke-width="2.2" fill="none" stroke-linecap="round"/><path fill="#7cc46b" d="M60 15 Q48 4 41 12 Q49 19 60 15Z"/><path fill="#8fd47c" d="M60 14 Q71 2 79 9 Q71 18 60 14Z"/>`,
+  };
+
+  // ---------- 얼굴 (안경, 스티커) ----------
+  const star = (x, y, r) =>
+    `<path fill="#f6c443" d="M${x} ${y - r} L${x + r * 0.3} ${y - r * 0.3} L${x + r} ${y} L${x + r * 0.3} ${y + r * 0.3} L${x} ${y + r} L${x - r * 0.3} ${y + r * 0.3} L${x - r} ${y} L${x - r * 0.3} ${y - r * 0.3}Z"/>`;
+  const FACE = {
+    "face-glasses": `<g fill="#ffffff" fill-opacity="0.25" stroke="#5a463e" stroke-width="1.8"><circle cx="48" cy="62" r="8.5"/><circle cx="72" cy="62" r="8.5"/></g><g stroke="#5a463e" stroke-width="1.8" fill="none"><path d="M56.5 61 Q60 58.5 63.5 61"/><path d="M39.5 60 L28 57"/><path d="M80.5 60 L92 57"/></g>`,
+    "face-sunglasses": `<g fill="#2f2b36"><path d="M36 57 H58 Q58 71 47 71 Q36 71 36 57Z"/><path d="M62 57 H84 Q84 71 73 71 Q62 71 62 57Z"/></g><path d="M58 59 H62 M36 58 L28 56 M84 58 L92 56" stroke="#2f2b36" stroke-width="2"/><g fill="#fff" opacity="0.5"><path d="M40 60 L45 60 L41 65Z"/><path d="M66 60 L71 60 L67 65Z"/></g>`,
+    "face-stars": star(37, 72, 4.5) + star(83, 72, 4.5) + star(31, 66, 2.5),
+    "face-bandage": `<g transform="rotate(-22 81 70)"><rect x="72" y="66.5" width="18" height="7" rx="3.5" fill="#f7d7b5"/><rect x="78" y="66.5" width="6" height="7" fill="#efc79f"/><g fill="#d9a77e"><circle cx="75" cy="69" r="0.6"/><circle cx="75" cy="71.5" r="0.6"/><circle cx="87" cy="69" r="0.6"/><circle cx="87" cy="71.5" r="0.6"/></g></g>`,
   };
 
   // ---------- 목 ----------
@@ -123,6 +177,11 @@
     "neck-tie": `<path fill="#4a6fa5" d="M56 92 H64 L62 98 H58Z"/><path fill="#4a6fa5" d="M58 98 H62 L65 118 L60 123 L55 118Z"/><path d="M57 106 L63 103 M56 112 L64 109" stroke="#6f93c7" stroke-width="1.4"/>`,
     "neck-medal": `<path d="M50 91 L60 108 L70 91" stroke="#5a8fd8" stroke-width="4" fill="none" stroke-linejoin="round"/><circle cx="60" cy="112" r="6.5" fill="#f5c542" stroke="#d9a62b" stroke-width="1.4"/><path d="M60 108.5 L61.2 111 L64 111.3 L62 113.2 L62.5 116 L60 114.6 L57.5 116 L58 113.2 L56 111.3 L58.8 111Z" fill="#fff3c4"/>`,
     "neck-gem": `<path d="M45 92 Q60 104 75 92" stroke="#fffaf2" stroke-width="1.6" fill="none"/><path fill="#7fd3f0" stroke="#4fb3d9" stroke-width="1" d="M60 97 L65 102 L60 109 L55 102Z"/>`,
+    "neck-bowtie": `<path fill="#e5566e" d="M60 96 L49 90 Q46 96 49 102Z M60 96 L71 90 Q74 96 71 102Z"/><circle cx="60" cy="96" r="3" fill="#c9485b"/>`,
+    "neck-lei": [[42, 93, "#ff8fb1"], [47, 99, "#f6d365"], [53, 103, "#ffb4a2"], [60, 104.5, "#c3b1f0"], [67, 103, "#ff8fb1"], [73, 99, "#f6d365"], [78, 93, "#ffb4a2"]]
+      .map(([x, y, c]) => `<circle cx="${x}" cy="${y}" r="4.6" fill="${c}"/><circle cx="${x}" cy="${y}" r="1.4" fill="#fffaf2"/>`)
+      .join(""),
+    "neck-bell": `<path d="M43 92 Q60 101 77 92" stroke="#e5566e" stroke-width="4" fill="none" stroke-linecap="round"/><circle cx="60" cy="103" r="5.5" fill="#f5c542" stroke="#d9a62b" stroke-width="1.2"/><path d="M54.5 102.5 H65.5" stroke="#d9a62b" stroke-width="1.2"/><circle cx="60" cy="106" r="1.3" fill="#8a6b2b"/>`,
   };
 
   // ---------- 가방·손에 든 것 (back: 몸 뒤, front: 몸 앞) ----------
@@ -142,6 +201,18 @@
     },
     "bag-umbrella": {
       front: `<path d="M98 43 L87 117" stroke="#8a6b55" stroke-width="2.2" stroke-linecap="round"/><path fill="#7fcfa8" d="M74 44 Q98 14 120 44 Q114 40 108 44 Q102 39 97 44 Q91 39 86 44 Q80 40 74 44Z"/><path d="M87 117 Q84 122 80 119" stroke="#8a6b55" stroke-width="2.2" fill="none" stroke-linecap="round"/>`,
+    },
+    "bag-camera": {
+      front: `<path d="M46 92 L79 116" stroke="#5a463e" stroke-width="2.2"/><rect x="72" y="113" width="23" height="16" rx="3.5" fill="#4f5d7e"/><rect x="76" y="110" width="8" height="4" rx="1.2" fill="#4f5d7e"/><circle cx="83.5" cy="121" r="5.2" fill="#cfe3f5" stroke="#2f3a52" stroke-width="2"/><circle cx="91" cy="116.5" r="1.4" fill="#f6d365"/>`,
+    },
+    "bag-bouquet": {
+      front: `<path d="M86 118 L93 97 M86 118 L86 94 M86 118 L79 98" stroke="#5aa54a" stroke-width="1.6"/><path fill="#fdfaf5" stroke="#eadfd6" d="M79 106 L93 106 L89 123 L83 123Z"/><g fill="#ff8fb1"><circle cx="93" cy="95" r="4.6"/></g><g fill="#f6d365"><circle cx="86" cy="91" r="4.6"/></g><g fill="#c3b1f0"><circle cx="79" cy="96" r="4.6"/></g><g fill="#fffaf2"><circle cx="93" cy="95" r="1.5"/><circle cx="86" cy="91" r="1.5"/><circle cx="79" cy="96" r="1.5"/></g>`,
+    },
+    "bag-icecream": {
+      front: `<path fill="#e0a85e" d="M80 103 L92 103 L86 121Z"/><path d="M82 106 L89 113 M90 106 L84 112" stroke="#c88f45" stroke-width="1"/><circle cx="86" cy="99" r="7" fill="#ffb4c8"/><circle cx="86" cy="91" r="5.5" fill="#fff1d6"/><circle cx="88" cy="88" r="1.7" fill="#e5566e"/>`,
+    },
+    "bag-map": {
+      front: `<g transform="rotate(-8 92 112)"><path fill="#fff1d6" stroke="#d9b465" stroke-width="1.2" d="M78 100 L86 103 L94 100 L102 103 V121 L94 118 L86 121 L78 118Z"/><path d="M86 103 V121 M94 100 V118" stroke="#d9b465" stroke-width="1"/><path d="M81 115 Q88 106 97 110" stroke="#e5566e" stroke-width="1.3" stroke-dasharray="2 2" fill="none"/><circle cx="98" cy="109" r="1.8" fill="#e5566e"/></g>`,
     },
   };
 
@@ -202,6 +273,7 @@
       top(o.topColor, o.skin, id),
       NECK[o.neck] || "",
       face(o.skin),
+      FACE[o.face] || "",
       hair.front(o.hairColor),
       HAT[o.hat] || "",
       bag.front || "",

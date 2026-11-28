@@ -1,10 +1,11 @@
 // Pomotrip 서비스 워커: 앱처럼 설치되고, 인터넷이 잠깐 끊겨도 첫 화면은 열리게 해요.
 // 원칙: 항상 인터넷에서 먼저 받고(최신 유지), 실패할 때만 저장해 둔 것을 보여줘요.
-const CACHE = "walkmodoro-v20";
+const CACHE = "walkmodoro-v21";
 const SHELL = [
   "/",
   "/static/style.css",
   "/static/avatar.js",
+  "/static/pets.js",
   "/static/sound.js",
   "/static/app.js",
   "/static/manifest.webmanifest",

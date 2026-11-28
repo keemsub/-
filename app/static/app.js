@@ -106,6 +106,7 @@ const SLOTS = [
   { id: "hair", name: "머리" },
   { id: "top", name: "옷" },
   { id: "hat", name: "모자" },
+  { id: "face", name: "얼굴" },
   { id: "neck", name: "목" },
   { id: "bag", name: "가방" },
   { id: "color", name: "색" },
@@ -114,6 +115,7 @@ const DEFAULT_OUTFIT = {
   hair: "hair-short",
   top: "top-tee",
   hat: null,
+  face: null,
   neck: null,
   bag: null,
   color: "color-mint",
@@ -124,7 +126,7 @@ const DEFAULT_OUTFIT = {
 // 저장된 옷차림 중 지금 목록에 없는 값은 기본값으로 돌려놔요.
 function cleanOutfit(saved) {
   const o = { ...DEFAULT_OUTFIT, ...(saved || {}) };
-  for (const slot of ["hair", "top", "hat", "neck", "bag", "color"]) {
+  for (const slot of ["hair", "top", "hat", "face", "neck", "bag", "color"]) {
     if (o[slot] !== null && ITEMS[o[slot]]?.slot !== slot) o[slot] = DEFAULT_OUTFIT[slot];
   }
   if (!CATALOG.skin_tones.includes(o.skin)) o.skin = DEFAULT_OUTFIT.skin;
@@ -1114,7 +1116,7 @@ function paintFigure(el) {
   }
   const back = el.classList.contains("walker-body") && streetOn();
   el.innerHTML = `${Avatar.svg(outfit, { back })}<span class="fig-pet"></span>`;
-  el.querySelector(".fig-pet").textContent = character.emoji;
+  Pets.paint(el.querySelector(".fig-pet"), character);
 }
 
 function renderCharacter() {
@@ -1181,7 +1183,7 @@ function renderCloset() {
   const grid = $("item-grid");
   grid.innerHTML = "";
   const items = CATALOG.items.filter((i) => i.slot === closetSlot);
-  if (["hat", "neck", "bag"].includes(closetSlot)) {
+  if (["hat", "face", "neck", "bag"].includes(closetSlot)) {
     items.unshift({ id: null, slot: closetSlot, name: "없음", icon: "", price: 0 });
   }
   for (const item of items) {
@@ -1592,7 +1594,8 @@ function finish() {
         : `${TRAINS.origin.name}에서 ${journey.line} 타고 ${formatMinutes(journey.flight_min)} 달려 ${journey.name}에 왔어요. 즐거운 여행!`
       : `${journey.name}까지 ${formatMinutes(Math.ceil(left / speedPerMin()))} 남았어요. 쉬고 나서 이어서 ${ride().verb}.`;
   } else {
-    $("done-emoji").textContent = arrived ? "🏁" : character.emoji;
+    if (arrived) $("done-emoji").textContent = "🏁";
+    else Pets.paint($("done-emoji"), character);
     $("done-title").textContent = arrived ? `${journey.name} 도착!` : `${formatDistance(walked)} 걸었어요!`;
     $("done-text").textContent = arrived
       ? `${wagwa(character.name)} 함께 ${formatDistance(journey.route.distance_m)}를 걸어왔어요. 정말 수고했어요.`
@@ -1680,7 +1683,7 @@ function renderSettings() {
     const btn = document.createElement("button");
     btn.className = `char${c.id === character.id ? " active" : ""}`;
     btn.innerHTML = '<span class="emoji"></span><span class="name"></span>';
-    btn.querySelector(".emoji").textContent = c.emoji;
+    Pets.paint(btn.querySelector(".emoji"), c);
     btn.querySelector(".name").textContent = c.name;
     btn.addEventListener("click", () => {
       character = c;

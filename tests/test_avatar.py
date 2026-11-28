@@ -68,3 +68,16 @@ def test_all_items_free_flag_reaches_page():
     from app.avatar import ALL_ITEMS_FREE, catalog
 
     assert catalog()["all_free"] is ALL_ITEMS_FREE
+
+
+def test_face_only_animals_have_full_body_drawings():
+    """이모지가 얼굴만 있는 동물은 pets.js에서 몸까지 그려요."""
+    import re
+    from pathlib import Path
+
+    static = Path(__file__).parent.parent / "app/static"
+    pets = (static / "pets.js").read_text()
+    app_ids = set(re.findall(r'id: "(\w+)", emoji:', (static / "app.js").read_text()))
+    for animal in ("bear", "panda", "koala", "hamster", "fox", "frog", "unicorn"):
+        assert animal in app_ids
+        assert re.search(rf"^\s+{animal}: body\(", pets, re.M), f"{animal} 몸 그림이 없어요"
