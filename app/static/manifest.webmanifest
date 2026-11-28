@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "뽀모도로 - 걸으며 집중하는 타이머",
-  "short_name": "뽀모도로",
+  "name": "Pomotrip - 집중하며 떠나는 여행",
+  "short_name": "Pomotrip",
   "description": "집중한 시간만큼 내 캐릭터가 지도 위를 걸어가는 귀여운 뽀모도로 타이머",
   "lang": "ko",
   "start_url": "/?source=pwa",

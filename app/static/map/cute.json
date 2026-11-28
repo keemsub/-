@@ -1,6 +1,6 @@
 {
  "version": 8,
- "name": "뽀모도로 귀여운 지도",
+ "name": "Pomotrip 귀여운 지도",
  "sources": {
   "openmaptiles": {
    "type": "vector",
