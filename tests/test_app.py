@@ -16,7 +16,7 @@ def test_health():
 def test_index_page_loads():
     res = client.get("/")
     assert res.status_code == 200
-    assert "뽀모도로" in res.text
+    assert "Pomotrip" in res.text
     assert "maplibre-gl.js" in res.text
 
 

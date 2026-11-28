@@ -1,4 +1,4 @@
-// 뽀모도로 아바타 그리기: 둥근 머리의 귀여운 사람 캐릭터를 SVG로 그려요.
+// Pomotrip 아바타 그리기: 둥근 머리의 귀여운 사람 캐릭터를 SVG로 그려요.
 // 모든 모양은 이 파일에서 직접 그린 독자 디자인이에요.
 // 사용법: Avatar.svg({ skin, hairColor, topColor, hair, top, hat, neck, bag })
 (function () {
