@@ -40,6 +40,15 @@ class Settings(BaseSettings):
     android_package: str = ""
     android_sha256: str = ""
 
+    # ---- 웹사이트 운영 ----
+    # 사이트 대표 주소 (예: https://walkmodoro.onrender.com). 비우면 접속한 주소를 써요.
+    site_url: str = ""
+    # 무료 방문 통계 GoatCounter의 코드 (https://코드.goatcounter.com). 비우면 통계를 안 모아요.
+    goatcounter_code: str = ""
+    # 구글 서치 콘솔, 네이버 서치어드바이저 소유 확인용 HTML 태그의 content 값
+    google_site_verification: str = ""
+    naver_site_verification: str = ""
+
     def login_providers(self) -> list[str]:
         providers = []
         if self.kakao_client_id:

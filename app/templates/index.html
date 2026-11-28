@@ -4,7 +4,23 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta id="theme-color" name="theme-color" content="#fff6ec">
-  <title>Pomotrip</title>
+  <title>Pomotrip 뽀모트립 · 집중하며 떠나는 지도 여행</title>
+  <!-- 검색엔진과 카카오톡·인스타 링크 미리보기 카드 -->
+  {% set desc = "집중한 시간만큼 내 캐릭터가 지도 위를 걸어가는 귀여운 뽀모도로 타이머. 걷기, 비행기, 기차 모드로 실제 장소까지 여행해요." %}
+  <meta name="description" content="{{ desc }}">
+  <link rel="canonical" href="{{ site_url }}/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Pomotrip">
+  <meta property="og:locale" content="ko_KR">
+  <meta property="og:title" content="Pomotrip 뽀모트립 · 집중하며 떠나는 지도 여행">
+  <meta property="og:description" content="{{ desc }}">
+  <meta property="og:url" content="{{ site_url }}/">
+  <meta property="og:image" content="{{ site_url }}/static/store/feature-graphic.png">
+  <meta property="og:image:width" content="1024">
+  <meta property="og:image:height" content="500">
+  <meta name="twitter:card" content="summary_large_image">
+  {% if google_verify %}<meta name="google-site-verification" content="{{ google_verify }}">{% endif %}
+  {% if naver_verify %}<meta name="naver-site-verification" content="{{ naver_verify }}">{% endif %}
   <!-- 휴대폰 홈 화면에 앱처럼 추가하기 위한 설정 -->
   <link rel="manifest" href="/static/manifest.webmanifest">
   <link rel="icon" type="image/svg+xml" href="/static/icons/icon.svg">
@@ -301,9 +317,27 @@
   <script id="avatar-catalog" type="application/json">{{ avatar | tojson }}</script>
   <script id="flight-catalog" type="application/json">{{ flights | tojson }}</script>
   <script id="train-catalog" type="application/json">{{ trains | tojson }}</script>
+  <script>
+    // 화면 오류를 서버 기록(Render Logs)으로 보내요. 한 번 열 때 최대 5개, 개인 정보는 안 보내요.
+    (() => {
+      let sent = 0;
+      const report = (msg, src, line) => {
+        if (sent++ >= 5 || !navigator.sendBeacon) return;
+        const file = String(src || "").split("?")[0].split("/").pop();
+        const text = `${String(msg).slice(0, 300)} @ ${file}:${line || 0} | ${navigator.userAgent.slice(0, 120)}`;
+        navigator.sendBeacon("/api/client-error", text);
+      };
+      addEventListener("error", (e) => report(e.message || "load error", e.filename, e.lineno));
+      addEventListener("unhandledrejection", (e) => report(`promise: ${e.reason && (e.reason.stack || e.reason.message) || e.reason}`, "", 0));
+    })();
+  </script>
   <script src="/static/vendor/maplibre/maplibre-gl.js"></script>
   <script src="/static/avatar.js"></script>
   <script src="/static/sound.js"></script>
   <script src="/static/app.js"></script>
+  {% if goatcounter %}
+  <!-- 방문 통계 (GoatCounter: 쿠키·개인정보 없이 방문 수만 세요) -->
+  <script data-goatcounter="https://{{ goatcounter }}.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
+  {% endif %}
 </body>
 </html>

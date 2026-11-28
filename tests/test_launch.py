@@ -49,3 +49,54 @@ def test_manifest_is_installable():
     m = client.get("/static/manifest.webmanifest").json()
     assert m["display"] == "standalone"
     assert any(i["sizes"] == "512x512" for i in m["icons"])
+
+
+def test_preview_card_and_seo_tags():
+    html = client.get("/").text
+    assert 'property="og:image"' in html
+    assert "/static/store/feature-graphic.png" in html
+    assert 'name="description"' in html
+    assert "goatcounter" not in html  # 코드가 없으면 통계 스크립트도 없어요
+
+
+def test_analytics_and_verification_when_set(monkeypatch):
+    import app.main as main
+
+    fake = Settings(
+        goatcounter_code="pomotrip",
+        google_site_verification="g-abc",
+        site_url="https://pomotrip.example/",
+    )
+    monkeypatch.setattr(main, "get_settings", lambda: fake)
+    html = client.get("/").text
+    assert "https://pomotrip.goatcounter.com/count" in html
+    assert 'content="g-abc"' in html
+    assert 'href="https://pomotrip.example/"' in html
+    assert "GoatCounter" in client.get("/privacy").text
+
+
+def test_bad_goatcounter_code_is_ignored(monkeypatch):
+    import app.main as main
+
+    monkeypatch.setattr(main, "get_settings", lambda: Settings(goatcounter_code='x"><script>'))
+    assert "goatcounter.com" not in client.get("/").text
+
+
+def test_robots_and_sitemap():
+    robots = client.get("/robots.txt").text
+    assert "Disallow: /api/" in robots
+    assert "Sitemap: http://testserver/sitemap.xml" in robots
+    res = client.get("/sitemap.xml")
+    assert res.headers["content-type"].startswith("application/xml")
+    assert "<loc>http://testserver/privacy</loc>" in res.text
+
+
+def test_health_accepts_head_for_uptime_monitors():
+    assert client.head("/health").status_code == 200
+
+
+def test_client_error_is_logged(caplog):
+    with caplog.at_level("WARNING", logger="pomotrip"):
+        res = client.post("/api/client-error", content="boom @ app.js:12")
+    assert res.status_code == 204
+    assert "boom @ app.js:12" in caplog.text
