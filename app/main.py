@@ -18,7 +18,15 @@ from app.config import get_settings
 from app.db import is_persistent
 from app.flights import catalog as flight_catalog
 from app.isochrone import CachedProvider, DemoProvider, IsochroneProvider, OrsProvider
-from app.journey import Geocoder, NominatimGeocoder, OrsRouter, OsmFootRouter, Router
+from app.journey import (
+    FallbackGeocoder,
+    Geocoder,
+    NominatimGeocoder,
+    OrsRouter,
+    OsmFootRouter,
+    PhotonGeocoder,
+    Router,
+)
 from app.places import (
     OverpassProvider,
     Place,
@@ -63,7 +71,7 @@ def get_place_provider() -> PlaceProvider:
 
 @lru_cache
 def get_geocoder() -> Geocoder:
-    return NominatimGeocoder()
+    return FallbackGeocoder(NominatimGeocoder(), PhotonGeocoder())
 
 
 @lru_cache
